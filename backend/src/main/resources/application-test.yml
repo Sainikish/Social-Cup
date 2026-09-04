@@ -1,0 +1,35 @@
+spring:
+  datasource:
+    url: jdbc:tc:postgresql:15://localhost/socialcup_test
+    username: test
+    password: test
+  jpa:
+    show-sql: false
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
+    validate-on-migrate: true
+
+logging:
+  level:
+    root: WARN
+    com.socialcup: INFO
+    org.springframework.security: INFO
+    org.testcontainers: INFO
+
+app:
+  cors:
+    allowed-origins:
+      - http://localhost:3000
+  rate-limit:
+    enabled: true
+    max-requests: 1000
+    window-seconds: 60
+  security:
+    jwt:
+      secret: test-secret-key
+  stripe:
+    api-key: sk_test_dummy
+  sentry:
+    enabled: false

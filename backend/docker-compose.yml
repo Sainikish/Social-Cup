@@ -1,0 +1,42 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: socialcup-postgres
+    environment:
+      POSTGRES_DB: socialcup_dev
+      POSTGRES_USER: socialcup
+      POSTGRES_PASSWORD: socialcup
+      PGTZ: UTC
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U socialcup -d socialcup_dev"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - socialcup-net
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: socialcup-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@socialcup.app
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    networks:
+      - socialcup-net
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  socialcup-net:
+    driver: bridge
