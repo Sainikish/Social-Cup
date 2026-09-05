@@ -5,10 +5,11 @@ Built with Expo, React Native, and TypeScript. Completely independent from `back
 (no shared tooling, no shared `node_modules`) — this is a separate project living
 alongside it in the same repository.
 
-This is the **Phase 7.1 foundation**: project scaffolding, navigation shell, theme
-tokens, reusable UI primitives, a typed API client skeleton, and secure token storage.
-No feature screens (login, cafes, drinks, ratings, diary) are implemented yet — those
-are later phases. Placeholder screens exist only to prove the navigation structure works.
+Phases 7.1–7.7 are complete: authenticated session management (login, register, token
+refresh, protected routes via `Stack.Protected`), cafe discovery/search/detail, drink
+discovery/detail, drink ratings (create/edit) and a personal drink diary, a profile
+screen backed by `/auth/me`, and app-wide polish (shared image fallbacks, accessibility
+labels, pull-to-refresh, TanStack Query foreground refetch via `AppState`).
 
 ## Prerequisites
 
@@ -143,41 +144,39 @@ profile, rather than local `.env` files.
 mobile/
 ├── app/                      # Expo Router - file-based routing, one file per screen
 │   ├── _layout.tsx           # Root layout: providers (SafeArea, TanStack Query), root Stack
-│   ├── index.tsx             # "/" - redirects into (app) (no auth guard yet)
+│   ├── index.tsx             # "/" - redirects to (app) or (auth) based on session state
 │   ├── +not-found.tsx
-│   ├── (auth)/                # Auth flow group
+│   ├── (auth)/                # Auth flow group - reachable only while unauthenticated
 │   │   ├── _layout.tsx
-│   │   ├── login.tsx          # placeholder
-│   │   └── register.tsx       # placeholder
-│   └── (app)/                 # Authenticated-app group (tab navigator)
+│   │   ├── login.tsx
+│   │   └── register.tsx
+│   └── (app)/                 # Authenticated group (tab navigator) - reachable only while authenticated
 │       ├── _layout.tsx
-│       ├── home.tsx            # placeholder
-│       ├── cafes.tsx           # placeholder
-│       └── profile.tsx         # placeholder
+│       ├── home.tsx
+│       ├── cafes/             # list (index) + detail ([id]) as a nested Stack
+│       ├── drinks/            # list (index) + detail ([id]), ratings live on the detail screen
+│       └── profile/           # profile (index) + drink diary (diary), as a nested Stack
 ├── src/
-│   ├── api/                  # Axios instance, error normalization
-│   ├── components/           # Generic, reusable UI primitives (Button, Card, ...)
+│   ├── api/                  # Axios instance, error normalization, auth endpoint wrappers
+│   ├── components/           # Generic, reusable UI primitives (Button, Card, FallbackImage, Avatar, ...)
 │   ├── config/                # env.ts - the ONE place API base URL is resolved
-│   ├── features/             # (empty) - feature-specific code lands here in later phases
-│   ├── hooks/                 # (empty) - shared hooks land here as they're needed
+│   ├── features/             # auth, cafes, drinks, ratings - each with types/api/hooks/components
+│   ├── hooks/                  # Shared hooks (useDebouncedValue, useAppStateFocusManager)
 │   ├── lib/                    # Third-party client setup (TanStack QueryClient)
 │   ├── storage/                # Secure token storage (Expo SecureStore)
 │   ├── theme/                  # Design tokens: colors, typography, spacing, radius, shadows
-│   ├── types/                  # Shared TypeScript types (PageResponse<T>, ApiError)
-│   └── utils/                  # (empty) - shared utilities land here as they're needed
+│   ├── types/                  # Shared TypeScript types (PageResponse<T>, ApiError, MemberDto)
+│   └── utils/                  # Shared utilities (apiErrors: field-error extraction, error mapping)
 ├── assets/                    # App icons, splash images
 ├── tests/                      # Jest + React Native Testing Library
 ├── app.config.ts               # Expo app config (replaces app.json - see below)
+├── eas.json                     # EAS Build profiles (development/preview/production)
 ├── eslint.config.js
 ├── jest.config.js
 ├── tsconfig.json
 ├── .env.example
 └── package.json
 ```
-
-`features/`, `hooks/`, and `utils/` exist now (with a `.gitkeep`) but are intentionally
-empty — they're where later phases' screen-specific logic, shared hooks, and shared
-utilities will go, without needing to restructure the project when that work starts.
 
 `app.config.ts` replaces the default `app.json` so app identity (name, icon, scheme) and
 the `expo-router`/`expo-secure-store` plugin registration live in one typed file.
@@ -198,10 +197,11 @@ the `expo-router`/`expo-secure-store` plugin registration live in one typed file
 
 ## Testing
 
-`jest-expo` preset + `@testing-library/react-native` (v14+, which has built-in Jest
-matchers — no separate `jest-native` package needed). Router-aware tests use
-`expo-router/testing-library`'s `renderRouter`, which renders the actual `app/`
-directory (providers included), not a mocked stand-in.
+`jest-expo` preset + `@testing-library/react-native`, which has built-in Jest matchers —
+no separate `jest-native` package needed. Pinned to `^13.3.3` (not the latest v14+):
+v14's async `render()` breaks `expo-router@57`'s `renderRouter` (see `test-renderer` peer
+dependency below). Router-aware tests use `expo-router/testing-library`'s `renderRouter`,
+which renders the actual `app/` directory (providers included), not a mocked stand-in.
 
 Tests live in `tests/`, not inside `app/` (Expo Router treats every file under `app/` as
 a route, so test files placed there would be picked up as screens).
@@ -218,11 +218,30 @@ a route, so test files placed there would be picked up as screens).
 - **Expo SecureStore**: Keychain (iOS) / Keystore-backed encrypted storage (Android) for
   JWTs — never `AsyncStorage`, which is unencrypted plain storage.
 
-## Known limitations (Phase 7.1)
+## Building with EAS
 
-- No authentication guard - `(auth)` and `(app)` are both reachable, and the app always
-  lands on `(app)/home`. Real session-based routing is a later phase.
-- No token refresh logic - `src/storage/authStorage.ts` can store/read/clear tokens, but
-  nothing decides _when_ to refresh or attaches tokens to outgoing requests yet.
-- No real screens - every screen under `app/` is a placeholder.
-- No app icons/splash images beyond Expo's scaffolded defaults.
+`eas.json` defines three build profiles (`development`, `preview`, `production`). None of
+them set `EXPO_PUBLIC_API_URL` directly - that value is environment-specific and should be
+supplied per profile via [EAS environment variables](https://docs.expo.dev/eas/environment-variables/)
+(`eas env:create --environment production ...`), not hardcoded into `eas.json`. If it's
+ever missing at build/runtime for `staging`/`production`, `src/config/env.ts` throws
+immediately rather than silently falling back to `localhost`.
+
+Before running a real `eas build`, note the release blockers below - an EAS project must
+be linked (`eas init`) and platform identifiers set first.
+
+## Known limitations / release blockers
+
+- **No EAS project linked yet** - `eas init` (requires an authenticated Expo account) has
+  not been run, so `eas.json`'s profiles cannot actually build until that's done.
+- **No `ios.bundleIdentifier` / `android.package` set** in `app.config.ts` - required
+  before any real (non-Expo-Go) build or store submission. Deliberately left unset here
+  rather than invented, since this repository hasn't defined real ones yet.
+- **No app icons/splash images beyond Expo's scaffolded defaults.**
+- **TanStack Query's `onlineManager`** (network-reconnect detection) is not wired to a
+  real connectivity source - doing so correctly needs `@react-native-community/netinfo`,
+  a dependency not currently installed. `focusManager` (foreground/background via
+  `AppState`) _is_ wired, in `src/hooks/useAppStateFocusManager.ts`.
+- **No physical device / emulator verification has been performed in CI or by an agent**
+  - all verification to date is `jest`/`@testing-library/react-native` plus
+    `expo export --platform {ios,android}` (Metro bundle compilation only).
