@@ -5,10 +5,13 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { LoadingIndicator } from '../src/components';
 import { AuthProvider, useAuth } from '../src/features/auth';
+import { useAppStateFocusManager } from '../src/hooks/useAppStateFocusManager';
 import { queryClient } from '../src/lib/queryClient';
 import { colors } from '../src/theme';
 
 export default function RootLayout() {
+  useAppStateFocusManager();
+
   return (
     <SafeAreaProvider>
       <QueryClientProvider client={queryClient}>

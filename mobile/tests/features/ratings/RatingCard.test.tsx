@@ -1,4 +1,5 @@
-import { render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen } from '@testing-library/react-native';
+import { Image } from 'react-native';
 
 import { RatingCard, formatRatingDate } from '../../../src/features/ratings/components/RatingCard';
 import type { DrinkRatingResponse } from '../../../src/features/ratings/types';
@@ -53,6 +54,41 @@ describe('RatingCard', () => {
     // other way (e.g. a stray prop spread).
     expect(screen.queryByText(/@/)).toBeNull();
     expect(screen.queryByText('MEMBER')).toBeNull();
+  });
+
+  it("shows the author's avatar image when avatarUrl is present", () => {
+    render(
+      <RatingCard
+        rating={rating({
+          author: {
+            id: 'm1',
+            firstName: 'Ada',
+            lastName: 'Lovelace',
+            avatarUrl: 'https://example.com/ada.jpg',
+          },
+        })}
+      />
+    );
+    expect(screen.getByLabelText('Ada Lovelace avatar')).toBeTruthy();
+  });
+
+  it('falls back to an initial-letter avatar when the avatar URL fails to load', () => {
+    render(
+      <RatingCard
+        rating={rating({
+          author: {
+            id: 'm1',
+            firstName: 'Ada',
+            lastName: 'Lovelace',
+            avatarUrl: 'https://example.com/broken.jpg',
+          },
+        })}
+      />
+    );
+
+    fireEvent(screen.UNSAFE_getByType(Image), 'error');
+
+    expect(screen.getByText('A')).toBeTruthy();
   });
 
   it('shows a "Your rating" badge only when isOwnRating is true', () => {

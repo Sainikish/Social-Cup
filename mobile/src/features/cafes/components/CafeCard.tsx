@@ -1,6 +1,6 @@
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { Card } from '../../../components';
+import { Card, FallbackImage } from '../../../components';
 import { colors, fontSize, fontWeight, radius, spacing } from '../../../theme';
 import type { CafeSummaryResponse } from '../types';
 
@@ -20,18 +20,9 @@ export function CafeCard({ cafe, onPress }: CafeCardProps) {
     >
       <Card style={styles.card}>
         <View style={styles.photoContainer}>
-          {cafe.primaryPhotoUrl ? (
-            <Image
-              source={{ uri: cafe.primaryPhotoUrl }}
-              style={styles.photo}
-              resizeMode="cover"
-              accessibilityIgnoresInvertColors
-            />
-          ) : (
-            <View style={[styles.photo, styles.photoPlaceholder]}>
-              <Text style={styles.photoPlaceholderText}>☕</Text>
-            </View>
-          )}
+          <FallbackImage uri={cafe.primaryPhotoUrl} style={styles.photo}>
+            <Text style={styles.photoPlaceholderText}>☕</Text>
+          </FallbackImage>
           {cafe.featured ? (
             <View style={styles.featuredBadge}>
               <Text style={styles.featuredBadgeText}>Featured</Text>
@@ -79,11 +70,6 @@ const styles = StyleSheet.create({
     height: PHOTO_HEIGHT,
     borderTopLeftRadius: radius.lg,
     borderTopRightRadius: radius.lg,
-  },
-  photoPlaceholder: {
-    backgroundColor: colors.surfaceMuted,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   photoPlaceholderText: {
     fontSize: 32,

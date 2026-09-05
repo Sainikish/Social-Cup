@@ -5,6 +5,7 @@ import { StyleSheet, View } from 'react-native';
 import { toApiError } from '../../../src/api/client';
 import { DrinkList, useSignatureDrinksQuery } from '../../../src/features/drinks';
 import { colors } from '../../../src/theme';
+import { genericErrorMessage } from '../../../src/utils/apiErrors';
 
 // GET /drinks/signature is the only drink discovery/listing endpoint the
 // backend exposes (verified against DrinkController.java) - no search or
@@ -26,7 +27,9 @@ export default function DrinksScreen() {
         drinks={drinks}
         isLoading={signatureQuery.isLoading}
         isError={signatureQuery.isError}
-        errorMessage={signatureQuery.error ? toApiError(signatureQuery.error).message : undefined}
+        errorMessage={
+          signatureQuery.error ? genericErrorMessage(toApiError(signatureQuery.error)) : undefined
+        }
         onRetry={() => void signatureQuery.refetch()}
         isRefreshing={signatureQuery.isRefetching && !signatureQuery.isFetchingNextPage}
         onRefresh={() => void signatureQuery.refetch()}

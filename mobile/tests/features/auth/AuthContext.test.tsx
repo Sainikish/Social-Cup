@@ -2,6 +2,7 @@ import { act, renderHook, waitFor } from '@testing-library/react-native';
 
 import * as authApi from '../../../src/api/auth';
 import { AuthProvider, useAuth } from '../../../src/features/auth';
+import { queryClient } from '../../../src/lib/queryClient';
 import {
   clearAuthTokens,
   getAccessToken,
@@ -148,5 +149,41 @@ describe('AuthContext logout', () => {
     expect(mockClearAuthTokens).toHaveBeenCalledTimes(1);
     expect(result.current.status).toBe('unauthenticated');
     expect(result.current.user).toBeNull();
+  });
+
+  it('clears the shared query cache, so no stale data survives into the next account on this device', async () => {
+    mockGetAccessToken.mockResolvedValue('stored-access-token');
+    mockGetRefreshToken.mockResolvedValue('stored-refresh-token');
+    mockGetCurrentUser.mockResolvedValue(SAMPLE_USER);
+    queryClient.setQueryData(['probe'], { leaked: true });
+
+    const { result } = renderAuth();
+    await waitFor(() => expect(result.current.status).toBe('authenticated'));
+
+    await act(async () => {
+      await result.current.logout();
+    });
+
+    expect(queryClient.getQueryData(['probe'])).toBeUndefined();
+  });
+
+  it('makes no API request during logout beyond what authentication already required', async () => {
+    mockGetAccessToken.mockResolvedValue('stored-access-token');
+    mockGetRefreshToken.mockResolvedValue('stored-refresh-token');
+    mockGetCurrentUser.mockResolvedValue(SAMPLE_USER);
+
+    const { result } = renderAuth();
+    await waitFor(() => expect(result.current.status).toBe('authenticated'));
+    expect(mockGetCurrentUser).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await result.current.logout();
+    });
+
+    // No additional /auth/me, login, or register call was made as part of
+    // signing out - logout is purely local (clear tokens, clear cache).
+    expect(mockGetCurrentUser).toHaveBeenCalledTimes(1);
+    expect(mockLogin).not.toHaveBeenCalled();
+    expect(mockRegister).not.toHaveBeenCalled();
   });
 });

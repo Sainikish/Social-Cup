@@ -5,6 +5,7 @@ import { toApiError } from '../../src/api/client';
 import { Button, EmptyState, ErrorState, LoadingIndicator } from '../../src/components';
 import { CafeCard, useFeaturedCafesQuery } from '../../src/features/cafes';
 import { colors, fontSize, fontWeight, spacing } from '../../src/theme';
+import { genericErrorMessage } from '../../src/utils/apiErrors';
 
 const FEATURED_CARD_WIDTH = 260;
 
@@ -28,7 +29,9 @@ export default function HomeScreen() {
         ) : featuredQuery.isError ? (
           <ErrorState
             message={
-              featuredQuery.error ? toApiError(featuredQuery.error).message : 'Could not load featured cafes.'
+              featuredQuery.error
+                ? genericErrorMessage(toApiError(featuredQuery.error))
+                : 'Could not load featured cafes.'
             }
             onRetry={() => void featuredQuery.refetch()}
             retryLabel="Retry"

@@ -1,7 +1,6 @@
-import { useState } from 'react';
-import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { colors, radius } from '../../../theme';
+import { FallbackImage } from '../../../components';
 import type { CafePhotoDto } from '../types';
 
 export interface CafePhotoGalleryProps {
@@ -10,39 +9,22 @@ export interface CafePhotoGalleryProps {
 
 const GALLERY_HEIGHT = 220;
 
-// Deliberately narrower than ViewStyle/ImageStyle (which disagree on some
-// properties, e.g. `overflow`) - the only thing callers below ever vary is
-// width, and that's valid on both View and Image.
+// Deliberately narrower than ImageStyle (the only thing callers below ever
+// vary is width, and FallbackImage forwards this style to both its image
+// and placeholder branches).
 interface WidthStyle {
   width?: number;
 }
 
-function PlaceholderPhoto({ style }: { style?: WidthStyle }) {
-  return (
-    <View style={[styles.image, styles.placeholder, style]}>
-      <Text style={styles.placeholderText}>☕</Text>
-    </View>
-  );
-}
-
-// Tracks its own load failure so one broken/invalid URL falls back to the
-// placeholder without affecting the rest of the gallery.
 function GalleryPhoto({ photo, style }: { photo: CafePhotoDto; style?: WidthStyle }) {
-  const [failed, setFailed] = useState(false);
-
-  if (failed) {
-    return <PlaceholderPhoto style={style} />;
-  }
-
   return (
-    <Image
-      source={{ uri: photo.photoUrl }}
+    <FallbackImage
+      uri={photo.photoUrl}
       style={[styles.image, style]}
-      resizeMode="cover"
-      onError={() => setFailed(true)}
       accessibilityLabel={photo.caption ?? undefined}
-      accessibilityIgnoresInvertColors
-    />
+    >
+      <Text style={styles.placeholderText}>☕</Text>
+    </FallbackImage>
   );
 }
 
@@ -50,7 +32,9 @@ export function CafePhotoGallery({ photos }: CafePhotoGalleryProps) {
   if (photos.length === 0) {
     return (
       <View style={styles.container}>
-        <PlaceholderPhoto />
+        <FallbackImage uri={null} style={styles.image}>
+          <Text style={styles.placeholderText}>☕</Text>
+        </FallbackImage>
       </View>
     );
   }
@@ -90,12 +74,6 @@ const styles = StyleSheet.create({
   },
   pagedImage: {
     width: 360,
-  },
-  placeholder: {
-    backgroundColor: colors.surfaceMuted,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radius.md,
   },
   placeholderText: {
     fontSize: 48,

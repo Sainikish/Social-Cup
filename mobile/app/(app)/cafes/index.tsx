@@ -12,6 +12,7 @@ import {
 } from '../../../src/features/cafes';
 import { useDebouncedValue } from '../../../src/hooks/useDebouncedValue';
 import { colors, spacing } from '../../../src/theme';
+import { genericErrorMessage } from '../../../src/utils/apiErrors';
 
 const SEARCH_DEBOUNCE_MS = 400;
 
@@ -71,7 +72,7 @@ export default function CafesScreen() {
         cafes={cafes}
         isLoading={activeQuery.isLoading}
         isError={activeQuery.isError}
-        errorMessage={activeQuery.error ? toApiError(activeQuery.error).message : undefined}
+        errorMessage={activeQuery.error ? genericErrorMessage(toApiError(activeQuery.error)) : undefined}
         onRetry={() => void activeQuery.refetch()}
         isRefreshing={activeQuery.isRefetching && !activeQuery.isFetchingNextPage}
         onRefresh={() => void activeQuery.refetch()}

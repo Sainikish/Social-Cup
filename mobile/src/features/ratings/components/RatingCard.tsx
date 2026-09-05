@@ -1,7 +1,7 @@
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
-import { Card } from '../../../components';
-import { colors, fontSize, fontWeight, radius, spacing } from '../../../theme';
+import { Avatar, Card } from '../../../components';
+import { colors, fontSize, fontWeight, spacing } from '../../../theme';
 import type { DrinkRatingResponse } from '../types';
 import { RatingStars } from './RatingStars';
 
@@ -40,11 +40,7 @@ export function RatingCard({ rating, isOwnRating = false }: RatingCardProps) {
   return (
     <Card style={styles.card}>
       <View style={styles.header}>
-        {rating.author?.avatarUrl ? (
-          <Image source={{ uri: rating.author.avatarUrl }} style={styles.avatar} />
-        ) : (
-          <View style={[styles.avatar, styles.avatarPlaceholder]} />
-        )}
+        <Avatar avatarUrl={rating.author?.avatarUrl} name={authorName} size={36} />
         <View style={styles.headerText}>
           <View style={styles.nameRow}>
             <Text style={styles.name}>{authorName}</Text>
@@ -67,14 +63,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-  },
-  avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: radius.lg,
-  },
-  avatarPlaceholder: {
-    backgroundColor: colors.surfaceMuted,
   },
   headerText: {
     flex: 1,

@@ -1,5 +1,6 @@
 import path from 'node:path';
 
+import { fireEvent } from '@testing-library/react-native';
 import { renderRouter, screen, waitFor } from 'expo-router/testing-library';
 
 import * as authApi from '../../src/api/auth';
@@ -71,5 +72,28 @@ describe('route protection', () => {
       expect(screen.getByText('Welcome back')).toBeTruthy();
     });
     expect(screen.queryByText('Discover Social Cup')).toBeNull();
+  });
+
+  it('clears protected navigation state and returns to login when signing out from a nested (app) route', async () => {
+    mockGetAccessToken.mockResolvedValue('valid-access-token');
+    mockGetRefreshToken.mockResolvedValue('valid-refresh-token');
+    mockGetCurrentUser.mockResolvedValue(SAMPLE_USER);
+
+    // Profile is a nested Stack screen (its own header, distinct from the
+    // Home tab root) - starting here rather than at Home is what proves
+    // Stack.Protected tears down the ENTIRE (app) subtree on sign-out,
+    // regardless of how deep the user was when they logged out.
+    renderRouter(APP_DIR, { initialUrl: '/(app)/profile' });
+
+    await waitFor(() => {
+      expect(screen.getByText('ada@example.com')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByLabelText('Sign out'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Welcome back')).toBeTruthy();
+    });
+    expect(screen.queryByText('ada@example.com')).toBeNull();
   });
 });

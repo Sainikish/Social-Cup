@@ -13,6 +13,7 @@ import {
   useDrinkRatingsQuery,
 } from '../../../src/features/ratings';
 import { colors, fontSize, fontWeight, radius, spacing } from '../../../src/theme';
+import { genericErrorMessage } from '../../../src/utils/apiErrors';
 
 const PHOTO_SIZE = 220;
 
@@ -31,7 +32,11 @@ export default function DrinkDetailScreen() {
   if (drinkQuery.isError || !drinkQuery.data) {
     return (
       <ErrorState
-        message={drinkQuery.error ? toApiError(drinkQuery.error).message : 'This drink could not be found.'}
+        message={
+          drinkQuery.error
+            ? genericErrorMessage(toApiError(drinkQuery.error))
+            : 'This drink could not be found.'
+        }
         onRetry={() => void drinkQuery.refetch()}
         retryLabel="Retry"
       />

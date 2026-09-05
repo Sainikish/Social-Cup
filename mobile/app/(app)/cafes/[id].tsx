@@ -11,6 +11,7 @@ import {
   useCafeDrinksQuery,
 } from '../../../src/features/cafes';
 import { colors, fontSize, fontWeight, radius, spacing } from '../../../src/theme';
+import { genericErrorMessage } from '../../../src/utils/apiErrors';
 
 function normalizeWebsiteUrl(website: string): string {
   return /^https?:\/\//i.test(website) ? website : `https://${website}`;
@@ -29,7 +30,9 @@ export default function CafeDetailScreen() {
   if (cafeQuery.isError || !cafeQuery.data) {
     return (
       <ErrorState
-        message={cafeQuery.error ? toApiError(cafeQuery.error).message : 'This cafe could not be found.'}
+        message={
+          cafeQuery.error ? genericErrorMessage(toApiError(cafeQuery.error)) : 'This cafe could not be found.'
+        }
         onRetry={() => void cafeQuery.refetch()}
         retryLabel="Retry"
       />
@@ -122,7 +125,11 @@ export default function CafeDetailScreen() {
             <ActivityIndicator size="small" color={colors.primary} />
           ) : drinksQuery.isError ? (
             <ErrorState
-              message={drinksQuery.error ? toApiError(drinksQuery.error).message : 'Could not load drinks.'}
+              message={
+                drinksQuery.error
+                  ? genericErrorMessage(toApiError(drinksQuery.error))
+                  : 'Could not load drinks.'
+              }
               onRetry={() => void drinksQuery.refetch()}
               retryLabel="Retry"
             />

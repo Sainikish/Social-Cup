@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
+import { Image } from 'react-native';
 
 import { CafeCard } from '../../../src/features/cafes/components/CafeCard';
 import type { CafeSummaryResponse } from '../../../src/features/cafes/types';
@@ -43,6 +44,17 @@ describe('CafeCard', () => {
 
   it('shows a placeholder when there is no primary photo', () => {
     render(<CafeCard cafe={cafe({ primaryPhotoUrl: null })} onPress={() => {}} />);
+    expect(screen.getByText('☕')).toBeTruthy();
+  });
+
+  it('falls back to the placeholder when the primary photo URL fails to load', () => {
+    render(
+      <CafeCard cafe={cafe({ primaryPhotoUrl: 'https://example.com/broken.jpg' })} onPress={() => {}} />
+    );
+    expect(screen.queryByText('☕')).toBeNull();
+
+    fireEvent(screen.UNSAFE_getByType(Image), 'error');
+
     expect(screen.getByText('☕')).toBeTruthy();
   });
 

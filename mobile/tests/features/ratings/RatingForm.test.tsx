@@ -136,6 +136,37 @@ describe('RatingForm (create mode)', () => {
     );
   });
 
+  it('never submits the same rating twice when the submit button is pressed again while a request is pending', async () => {
+    let resolveCreate: (() => void) | undefined;
+    mockCreateRating.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveCreate = () =>
+            resolve({
+              id: 'r1',
+              drinkId: 'drink-1',
+              drinkName: 'Cortado',
+              cafeId: 'cafe-1',
+              cafeName: 'Blue Bottle Coffee',
+              rating: 5,
+              note: null,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            });
+        })
+    );
+    renderForm();
+
+    fireEvent.press(screen.getByLabelText('Rate 5 stars'));
+    const submitButton = screen.getByTestId('rating-submit-button');
+    fireEvent.press(submitButton);
+    fireEvent.press(submitButton);
+    fireEvent.press(submitButton);
+
+    await waitFor(() => expect(mockCreateRating).toHaveBeenCalledTimes(1));
+    resolveCreate?.();
+  });
+
   it('shows the specific conflict message on a 409 and never the raw backend code/message', async () => {
     mockCreateRating.mockRejectedValue(apiError(409, 'CONFLICT', 'Duplicate rating for member/drink'));
     renderForm();
