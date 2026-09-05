@@ -1,16 +1,65 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
+import { FlatList, StyleSheet, Text, View } from 'react-native';
 
-import { Card } from '../../src/components';
-import { colors, spacing, fontSize, fontWeight } from '../../src/theme';
+import { toApiError } from '../../src/api/client';
+import { Button, EmptyState, ErrorState, LoadingIndicator } from '../../src/components';
+import { CafeCard, useFeaturedCafesQuery } from '../../src/features/cafes';
+import { colors, fontSize, fontWeight, spacing } from '../../src/theme';
 
-// Placeholder only - the real home feed is a later phase.
+const FEATURED_CARD_WIDTH = 260;
+
 export default function HomeScreen() {
+  const router = useRouter();
+  const featuredQuery = useFeaturedCafesQuery();
+  const featuredCafes = featuredQuery.data?.content ?? [];
+
   return (
     <View style={styles.container}>
-      <Card>
-        <Text style={styles.title}>Welcome to Social Cup</Text>
-        <Text style={styles.description}>Your home feed will be implemented in a later phase.</Text>
-      </Card>
+      <View style={styles.header}>
+        <Text style={styles.heading}>Discover Social Cup</Text>
+        <Text style={styles.subheading}>Find your next favorite coffee spot.</Text>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Featured Cafes</Text>
+
+        {featuredQuery.isLoading ? (
+          <LoadingIndicator label="Loading featured cafes..." />
+        ) : featuredQuery.isError ? (
+          <ErrorState
+            message={
+              featuredQuery.error ? toApiError(featuredQuery.error).message : 'Could not load featured cafes.'
+            }
+            onRetry={() => void featuredQuery.refetch()}
+            retryLabel="Retry"
+          />
+        ) : featuredCafes.length === 0 ? (
+          <EmptyState
+            title="No featured cafes yet"
+            description="Check back soon for hand-picked recommendations."
+          />
+        ) : (
+          <FlatList
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            data={featuredCafes}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.featuredList}
+            ItemSeparatorComponent={() => <View style={styles.featuredSeparator} />}
+            renderItem={({ item }) => (
+              <View style={styles.featuredCard}>
+                <CafeCard cafe={item} onPress={(cafeId) => router.push(`/(app)/cafes/${cafeId}`)} />
+              </View>
+            )}
+          />
+        )}
+      </View>
+
+      <Button
+        label="View All Cafes"
+        onPress={() => router.push('/(app)/cafes')}
+        accessibilityLabel="View all cafes"
+      />
     </View>
   );
 }
@@ -20,15 +69,36 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
     padding: spacing.lg,
+    gap: spacing.lg,
   },
-  title: {
+  header: {
+    gap: spacing.xs,
+  },
+  heading: {
+    fontSize: fontSize.xxl,
+    fontWeight: fontWeight.bold,
+    color: colors.textPrimary,
+  },
+  subheading: {
+    fontSize: fontSize.md,
+    color: colors.textSecondary,
+  },
+  section: {
+    flex: 1,
+    gap: spacing.sm,
+  },
+  sectionTitle: {
     fontSize: fontSize.lg,
     fontWeight: fontWeight.semibold,
     color: colors.textPrimary,
-    marginBottom: spacing.xs,
   },
-  description: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
+  featuredList: {
+    paddingVertical: spacing.xs,
+  },
+  featuredSeparator: {
+    width: spacing.md,
+  },
+  featuredCard: {
+    width: FEATURED_CARD_WIDTH,
   },
 });
