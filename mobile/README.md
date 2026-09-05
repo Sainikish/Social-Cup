@@ -220,12 +220,13 @@ a route, so test files placed there would be picked up as screens).
 
 ## Building with EAS
 
-`eas.json` defines three build profiles (`development`, `preview`, `production`). None of
-them set `EXPO_PUBLIC_API_URL` directly - that value is environment-specific and should be
-supplied per profile via [EAS environment variables](https://docs.expo.dev/eas/environment-variables/)
-(`eas env:create --environment production ...`), not hardcoded into `eas.json`. If it's
-ever missing at build/runtime for `staging`/`production`, `src/config/env.ts` throws
-immediately rather than silently falling back to `localhost`.
+`eas.json` defines three build profiles (`development`, `preview`, `production`), each
+linked via `"environment"` to the matching [EAS Environment](https://docs.expo.dev/eas/environment-variables/).
+None of them set `EXPO_PUBLIC_API_URL` directly - that value is environment-specific and
+must be created per environment instead (`eas env:create --environment production --name
+EXPO_PUBLIC_API_URL --value https://... --visibility plaintext`), not hardcoded into
+`eas.json`. If it's ever missing at build/runtime for `staging`/`production`,
+`src/config/env.ts` throws immediately rather than silently falling back to `localhost`.
 
 Before running a real `eas build`, note the release blockers below - an EAS project must
 be linked (`eas init`) and platform identifiers set first.
@@ -233,7 +234,10 @@ be linked (`eas init`) and platform identifiers set first.
 ## Known limitations / release blockers
 
 - **No EAS project linked yet** - `eas init` (requires an authenticated Expo account) has
-  not been run, so `eas.json`'s profiles cannot actually build until that's done.
+  not been run, so `eas.json`'s profiles cannot actually build until that's done. As a
+  consequence, no `EXPO_PUBLIC_API_URL` value has been created in any EAS Environment
+  either - that also requires a linked, authenticated project, and the real staging/
+  production backend URLs are not decided in this repository yet.
 - **No `ios.bundleIdentifier` / `android.package` set** in `app.config.ts` - required
   before any real (non-Expo-Go) build or store submission. Deliberately left unset here
   rather than invented, since this repository hasn't defined real ones yet.
