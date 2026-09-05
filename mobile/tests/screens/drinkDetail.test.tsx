@@ -1,9 +1,14 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 import DrinkDetailScreen from '../../app/(app)/drinks/[id]';
+import { useAuth } from '../../src/features/auth';
 import * as drinksApi from '../../src/features/drinks/api';
 import type { DrinkResponse } from '../../src/features/drinks/types';
+import * as ratingsApi from '../../src/features/ratings/api';
+import type { DrinkRatingResponse } from '../../src/features/ratings/types';
+import type { PageResponse } from '../../src/types/api';
+import type { MemberDto } from '../../src/types/auth';
 
 const mockPush = jest.fn();
 let mockSearchParams: { id: string } = { id: 'drink-1' };
@@ -15,8 +20,39 @@ jest.mock('expo-router', () => ({
 }));
 
 jest.mock('../../src/features/drinks/api');
+jest.mock('../../src/features/ratings/api');
+jest.mock('../../src/features/auth', () => ({
+  ...jest.requireActual('../../src/features/auth'),
+  useAuth: jest.fn(),
+}));
 
 const mockGetDrinkById = drinksApi.getDrinkById as jest.MockedFunction<typeof drinksApi.getDrinkById>;
+const mockGetDrinkRatings = ratingsApi.getDrinkRatings as jest.MockedFunction<
+  typeof ratingsApi.getDrinkRatings
+>;
+const mockUseAuth = useAuth as jest.MockedFunction<typeof useAuth>;
+
+const AUTHENTICATED_USER: MemberDto = {
+  id: 'member-1',
+  email: 'ada@example.com',
+  firstName: 'Ada',
+  lastName: 'Lovelace',
+  avatarUrl: null,
+  status: 'ACTIVE',
+  roles: ['MEMBER'],
+  createdAt: new Date().toISOString(),
+};
+
+function authAs(user: MemberDto | null) {
+  mockUseAuth.mockReturnValue({
+    status: user ? 'authenticated' : 'unauthenticated',
+    user,
+    login: jest.fn(),
+    register: jest.fn(),
+    logout: jest.fn(),
+    initializeAuth: jest.fn(),
+  });
+}
 
 function fullDrink(): DrinkResponse {
   return {
@@ -54,8 +90,39 @@ function minimalDrink(): DrinkResponse {
   };
 }
 
+function ratingsPage(
+  content: DrinkRatingResponse[],
+  overrides: Partial<PageResponse<DrinkRatingResponse>> = {}
+): PageResponse<DrinkRatingResponse> {
+  return {
+    content,
+    page: 0,
+    size: 20,
+    totalElements: content.length,
+    totalPages: 1,
+    first: true,
+    last: true,
+    empty: content.length === 0,
+    ...overrides,
+  };
+}
+
+function otherMemberRating(id = 'rating-1'): DrinkRatingResponse {
+  return {
+    id,
+    drinkId: 'drink-1',
+    rating: 5,
+    note: 'Fantastic',
+    author: { id: 'member-2', firstName: 'Grace', lastName: 'Hopper', avatarUrl: null },
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
 function renderScreen() {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
   return render(
     <QueryClientProvider client={queryClient}>
       <DrinkDetailScreen />
@@ -66,6 +133,8 @@ function renderScreen() {
 beforeEach(() => {
   jest.clearAllMocks();
   mockSearchParams = { id: 'drink-1' };
+  mockGetDrinkRatings.mockResolvedValue(ratingsPage([]));
+  authAs(AUTHENTICATED_USER);
 });
 
 describe('DrinkDetailScreen', () => {
@@ -118,15 +187,6 @@ describe('DrinkDetailScreen', () => {
     expect(await screen.findByText('Currently unavailable')).toBeTruthy();
   });
 
-  it('reserves an empty Ratings section without calling any rating endpoint', async () => {
-    mockGetDrinkById.mockResolvedValue(fullDrink());
-
-    renderScreen();
-
-    expect(await screen.findByText('Ratings')).toBeTruthy();
-    expect(screen.getByText('Ratings are coming soon.')).toBeTruthy();
-  });
-
   it('shows a loading state before the drink resolves', () => {
     mockGetDrinkById.mockReturnValue(new Promise(() => {}));
 
@@ -165,5 +225,126 @@ describe('DrinkDetailScreen', () => {
     fireEvent.press(cafeRow);
 
     expect(mockPush).toHaveBeenCalledWith('/(app)/cafes/cafe-1');
+  });
+
+  describe('Ratings section (Phase 7.5)', () => {
+    it('shows the public rating list, loading, then loaded', async () => {
+      mockGetDrinkById.mockResolvedValue(fullDrink());
+      mockGetDrinkRatings.mockResolvedValue(ratingsPage([otherMemberRating()]));
+
+      renderScreen();
+
+      expect(await screen.findByText('Ratings')).toBeTruthy();
+      expect(await screen.findByText('Grace Hopper')).toBeTruthy();
+      expect(mockGetDrinkRatings).toHaveBeenCalledWith('drink-1', { page: 0, size: 20 });
+    });
+
+    it('shows an empty state when nobody has rated the drink yet', async () => {
+      mockGetDrinkById.mockResolvedValue(fullDrink());
+      mockGetDrinkRatings.mockResolvedValue(ratingsPage([]));
+
+      renderScreen();
+
+      expect(await screen.findByText('No ratings yet')).toBeTruthy();
+    });
+
+    it('shows a mapped, human-readable error state with retry for a failed ratings request', async () => {
+      mockGetDrinkById.mockResolvedValue(fullDrink());
+      // A network failure, as toApiError distinguishes it (isAxiosError with
+      // no .response) - not a raw backend message or code.
+      mockGetDrinkRatings.mockRejectedValue({
+        isAxiosError: true,
+        code: 'ERR_NETWORK',
+        message: 'Network Error',
+        toJSON: () => ({}),
+      });
+
+      renderScreen();
+
+      await screen.findByText('Cortado');
+      expect(
+        await screen.findByText('Could not reach the server. Check your connection and try again.')
+      ).toBeTruthy();
+      expect(screen.queryByText('Network Error')).toBeNull();
+    });
+
+    it('shows a "Load more ratings" action when there is a next page, and fetches it on press', async () => {
+      mockGetDrinkById.mockResolvedValue(fullDrink());
+      mockGetDrinkRatings
+        .mockResolvedValueOnce(ratingsPage([otherMemberRating('r1')], { last: false, totalPages: 2 }))
+        .mockResolvedValueOnce(
+          ratingsPage([otherMemberRating('r2')], { page: 1, last: true, totalPages: 2 })
+        );
+
+      renderScreen();
+
+      const loadMore = await screen.findByLabelText('Load more ratings');
+      fireEvent.press(loadMore);
+
+      await waitFor(() => expect(mockGetDrinkRatings).toHaveBeenCalledTimes(2));
+      expect(mockGetDrinkRatings).toHaveBeenNthCalledWith(2, 'drink-1', { page: 1, size: 20 });
+    });
+
+    it('shows a "Rate this drink" CTA for an authenticated member with no existing rating', async () => {
+      mockGetDrinkById.mockResolvedValue(fullDrink());
+      mockGetDrinkRatings.mockResolvedValue(ratingsPage([otherMemberRating()]));
+      authAs(AUTHENTICATED_USER);
+
+      renderScreen();
+
+      expect(await screen.findByLabelText('Rate this drink')).toBeTruthy();
+    });
+
+    it('shows the own rating (badged) and an edit action instead of the CTA once the member has rated', async () => {
+      mockGetDrinkById.mockResolvedValue(fullDrink());
+      mockGetDrinkRatings.mockResolvedValue(
+        ratingsPage([
+          otherMemberRating(),
+          {
+            id: 'rating-mine',
+            drinkId: 'drink-1',
+            rating: 3,
+            note: 'My own note',
+            author: { id: 'member-1', firstName: 'Ada', lastName: 'Lovelace', avatarUrl: null },
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
+        ])
+      );
+      authAs(AUTHENTICATED_USER);
+
+      renderScreen();
+
+      expect(await screen.findByText('Your rating')).toBeTruthy();
+      expect(screen.getByLabelText('Edit your rating')).toBeTruthy();
+      expect(screen.queryByLabelText('Rate this drink')).toBeNull();
+    });
+
+    it('opens the rating form in create mode when "Rate this drink" is pressed, and hides it after a successful submit', async () => {
+      mockGetDrinkById.mockResolvedValue(fullDrink());
+      mockGetDrinkRatings.mockResolvedValue(ratingsPage([]));
+      authAs(AUTHENTICATED_USER);
+
+      renderScreen();
+
+      fireEvent.press(await screen.findByLabelText('Rate this drink'));
+
+      expect(await screen.findByText('Rate this drink')).toBeTruthy();
+      expect(screen.getByText('Submit rating')).toBeTruthy();
+    });
+
+    it('shows a login prompt instead of the rating CTA for an unauthenticated member, without calling a protected endpoint first', async () => {
+      mockGetDrinkById.mockResolvedValue(fullDrink());
+      mockGetDrinkRatings.mockResolvedValue(ratingsPage([]));
+      authAs(null);
+
+      renderScreen();
+
+      const loginButton = await screen.findByText('Log in to rate this drink');
+      fireEvent.press(loginButton);
+
+      expect(mockPush).toHaveBeenCalledWith('/(auth)/login');
+      expect(screen.queryByText('Submit rating')).toBeNull();
+    });
   });
 });
