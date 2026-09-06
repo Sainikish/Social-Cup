@@ -14,10 +14,12 @@ spring:
           fetch_size: 50
         order_inserts: true
         order_updates: true
+  spring:
   datasource:
-    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/socialcup}
-    username: ${DATABASE_USER:socialcup}
-    password: ${DATABASE_PASSWORD:socialcup}
+    url: jdbc:postgresql://${PGHOST}:${PGPORT}/${PGDATABASE}
+    username: ${PGUSER}
+    password: ${PGPASSWORD}
+
     hikari:
       maximum-pool-size: 10
       minimum-idle: 2
