@@ -27,7 +27,7 @@
         <maven.compiler.target>21</maven.compiler.target>
         <stripe.version>25.8.0</stripe.version>
         <aws.version>1.12.565</aws.version>
-        <testcontainers.version>1.19.1</testcontainers.version>
+        <testcontainers.version>1.21.4</testcontainers.version>
         <sentry.version>7.6.0</sentry.version>
     </properties>
 
