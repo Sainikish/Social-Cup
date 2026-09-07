@@ -8,6 +8,7 @@ import com.socialcup.cafe.repository.CafeRepository;
 import com.socialcup.credit.repository.CreditLedgerRepository;
 import com.socialcup.drink.repository.DrinkRepository;
 import com.socialcup.rating.repository.RatingRepository;
+import com.socialcup.redemption.repository.RedemptionCodeRepository;
 import com.socialcup.security.JwtTokenProvider;
 import com.socialcup.security.Roles;
 import com.socialcup.user.repository.MemberRepository;
@@ -79,6 +80,14 @@ class BaristaSecurityIntegrationTest {
 
     @MockitoBean
     private CafePinRepository cafePinRepository;
+
+    // Added when Phase C introduced RedemptionCodeService/RedemptionCodeController
+    // into the same shared app context this test boots - without this the context
+    // fails to start (no bean of this type exists under "no-persistence"), exactly
+    // the same class of gap CreditLedgerRepository/CafePinRepository above were
+    // already added here to avoid.
+    @MockitoBean
+    private RedemptionCodeRepository redemptionCodeRepository;
 
     @Test
     void baristaLoginIsPublic_andReturnsAWorkingBaristaTokenOnSuccess() throws Exception {
