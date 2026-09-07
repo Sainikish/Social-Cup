@@ -29,4 +29,14 @@ public class TestProtectedController {
         return Map.of("ok", true);
     }
 
+    // Mirrors admin-only above: /barista/** itself (SecurityConfig) only
+    // ever exposes public login/refresh endpoints in this phase, so there is
+    // no real BARISTA-protected endpoint yet to prove hasRole(BARISTA)
+    // actually gates access - this exists only to exercise that role check.
+    @GetMapping("/barista-only")
+    @PreAuthorize("hasRole('" + Roles.BARISTA + "')")
+    public Map<String, Object> baristaOnly() {
+        return Map.of("ok", true);
+    }
+
 }

@@ -33,7 +33,13 @@ public class SecurityConfig {
         "/actuator/health/**",
         "/auth/register",
         "/auth/login",
-        "/auth/refresh"
+        "/auth/refresh",
+        // A cafe terminal has no prior Bearer token to present when its
+        // access token has expired, same reason /auth/refresh above is
+        // public rather than gated - the refresh token in the request body
+        // IS the credential for both of these.
+        "/barista/login",
+        "/barista/refresh"
     };
 
     // GET-only: reads under /cafes and /drinks are public, matching this
@@ -78,6 +84,7 @@ public class SecurityConfig {
                 .requestMatchers(PUBLIC_ENDPOINTS).permitAll()
                 .requestMatchers(HttpMethod.GET, PUBLIC_READ_ENDPOINTS).permitAll()
                 .requestMatchers("/admin/**").hasRole(Roles.ADMIN)
+                .requestMatchers("/barista/**").hasRole(Roles.BARISTA)
                 .anyRequest().authenticated()
             )
             .exceptionHandling(exceptions -> exceptions

@@ -17,6 +17,7 @@ import java.time.Instant;
 import java.util.Collection;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @Component
@@ -47,23 +48,43 @@ public class JwtTokenProvider {
     }
 
     public String generateAccessToken(String subject, Collection<String> roles) {
-        return buildToken(subject, roles, accessTokenTtl, TokenType.ACCESS);
+        return buildToken(subject, roles, accessTokenTtl, TokenType.ACCESS, Map.of());
+    }
+
+    // Overload used by BaristaAuthService to attach a "cafeId" claim
+    // alongside the BARISTA role - the only extension this phase needed
+    // beyond the existing member token shape (subject/roles/type). Existing
+    // callers of the two-argument overload above are completely unaffected.
+    public String generateAccessToken(String subject, Collection<String> roles, Map<String, Object> extraClaims) {
+        return buildToken(subject, roles, accessTokenTtl, TokenType.ACCESS, extraClaims);
     }
 
     public String generateRefreshToken(String subject) {
-        return buildToken(subject, List.of(), refreshTokenTtl, TokenType.REFRESH);
+        return buildToken(subject, List.of(), refreshTokenTtl, TokenType.REFRESH, Map.of());
     }
 
-    private String buildToken(String subject, Collection<String> roles, Duration ttl, TokenType type) {
+    // Overload used by BaristaAuthService: a barista refresh token also
+    // carries "cafeId", which is what lets BaristaAuthService.refresh()
+    // distinguish "this is a barista refresh token" from a member's - a
+    // member refresh token has no such claim (see BaristaAuthService for
+    // why this matters instead of introducing a whole separate refresh
+    // architecture).
+    public String generateRefreshToken(String subject, Map<String, Object> extraClaims) {
+        return buildToken(subject, List.of(), refreshTokenTtl, TokenType.REFRESH, extraClaims);
+    }
+
+    private String buildToken(String subject, Collection<String> roles, Duration ttl, TokenType type,
+                               Map<String, Object> extraClaims) {
         Instant now = Instant.now();
-        return Jwts.builder()
+        var builder = Jwts.builder()
             .subject(subject)
             .claim("roles", roles)
             .claim("type", type.name())
             .issuedAt(Date.from(now))
             .expiration(Date.from(now.plus(ttl)))
-            .signWith(signingKey)
-            .compact();
+            .signWith(signingKey);
+        extraClaims.forEach(builder::claim);
+        return builder.compact();
     }
 
     public Optional<Claims> parseClaims(String token) {
