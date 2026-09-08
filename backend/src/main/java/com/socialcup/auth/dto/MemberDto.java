@@ -25,7 +25,7 @@ public record MemberDto(
             member.getLastName(),
             member.getAvatarUrl(),
             member.getStatus() != null ? member.getStatus().name() : null,
-            List.of(Roles.MEMBER),
+            List.of(member.getRole() != null ? member.getRole().name() : Roles.MEMBER),
             member.getCreatedAt()
         );
     }

@@ -13,6 +13,7 @@ import com.socialcup.common.exception.ResourceNotFoundException;
 import com.socialcup.security.JwtTokenProvider;
 import com.socialcup.security.Roles;
 import com.socialcup.user.entity.Member;
+import com.socialcup.user.entity.MemberRole;
 import com.socialcup.user.entity.MemberStatus;
 import com.socialcup.user.repository.MemberRepository;
 import io.jsonwebtoken.Claims;
@@ -90,6 +91,10 @@ class AuthServiceTest {
         Member saved = captor.getValue();
         assertThat(saved.getEmail()).isEqualTo("user@example.com");
         assertThat(saved.getPasswordHash()).isEqualTo("hashed-pwd");
+        // Normal public registration must always create MEMBER - never
+        // controllable by RegisterRequest, which has no role field at all.
+        assertThat(saved.getRole()).isEqualTo(MemberRole.MEMBER);
+        assertThat(response.user().roles()).containsExactly(Roles.MEMBER);
     }
 
     @Test
@@ -125,7 +130,32 @@ class AuthServiceTest {
         assertThat(response.accessToken()).isEqualTo("access-token");
         assertThat(response.user().id()).isEqualTo(memberId);
         assertThat(member.getFailedLoginAttempts()).isZero();
+        assertThat(response.user().roles()).containsExactly(Roles.MEMBER);
         verify(memberRepository).save(member);
+    }
+
+    // Proves the JWT role claim is derived from the persisted Member.role,
+    // not hardcoded - the one behavior this whole feature exists to add.
+    @Test
+    void login_adminMember_returnsAdminRoleInTokenAndResponse() {
+        UUID memberId = UUID.randomUUID();
+        Member member = new Member();
+        member.setId(memberId);
+        member.setEmail("admin@example.com");
+        member.setPasswordHash("hashed-pwd");
+        member.setStatus(MemberStatus.ACTIVE);
+        member.setRole(MemberRole.ADMIN);
+
+        when(memberRepository.findByEmailAndDeletedAtIsNull("admin@example.com")).thenReturn(Optional.of(member));
+        when(passwordEncoder.matches("correct-pwd", "hashed-pwd")).thenReturn(true);
+        when(tokenProvider.generateAccessToken(eq(memberId.toString()), eq(List.of(Roles.ADMIN)))).thenReturn("admin-access-token");
+        when(tokenProvider.generateRefreshToken(eq(memberId.toString()))).thenReturn("admin-refresh-token");
+
+        LoginRequest request = new LoginRequest("admin@example.com", "correct-pwd");
+        AuthResponse response = authService.login(request);
+
+        assertThat(response.accessToken()).isEqualTo("admin-access-token");
+        assertThat(response.user().roles()).containsExactly(Roles.ADMIN);
     }
 
     @Test
@@ -216,6 +246,36 @@ class AuthServiceTest {
 
         assertThat(response.accessToken()).isEqualTo("new-access-token");
         assertThat(response.refreshToken()).isEqualTo("new-refresh-token");
+        assertThat(response.user().roles()).containsExactly(Roles.MEMBER);
+    }
+
+    // Proves refresh re-derives the role from the freshly-loaded, persisted
+    // Member row - not from anything carried over in the old refresh token
+    // (the mocked Claims here never mention a role at all, exactly like the
+    // real refresh token payload doesn't either - see JwtTokenProvider).
+    @Test
+    void refreshToken_adminMember_returnsAdminRoleInTokenAndResponse() {
+        UUID memberId = UUID.randomUUID();
+        Member member = new Member();
+        member.setId(memberId);
+        member.setEmail("admin@example.com");
+        member.setStatus(MemberStatus.ACTIVE);
+        member.setRole(MemberRole.ADMIN);
+
+        Claims claims = mock(Claims.class);
+        when(claims.get("type", String.class)).thenReturn("REFRESH");
+        when(claims.getSubject()).thenReturn(memberId.toString());
+
+        when(tokenProvider.parseClaims("valid-admin-refresh-token")).thenReturn(Optional.of(claims));
+        when(memberRepository.findByIdAndDeletedAtIsNull(memberId)).thenReturn(Optional.of(member));
+        when(tokenProvider.generateAccessToken(eq(memberId.toString()), eq(List.of(Roles.ADMIN)))).thenReturn("new-admin-access-token");
+        when(tokenProvider.generateRefreshToken(eq(memberId.toString()))).thenReturn("new-admin-refresh-token");
+
+        RefreshTokenRequest request = new RefreshTokenRequest("valid-admin-refresh-token");
+        AuthResponse response = authService.refreshToken(request);
+
+        assertThat(response.accessToken()).isEqualTo("new-admin-access-token");
+        assertThat(response.user().roles()).containsExactly(Roles.ADMIN);
     }
 
     @Test
@@ -246,6 +306,25 @@ class AuthServiceTest {
         assertThat(dto.email()).isEqualTo("user@example.com");
         assertThat(dto.firstName()).isEqualTo("John");
         assertThat(dto.roles()).contains(Roles.MEMBER);
+    }
+
+    // GET /auth/me must report the member's ACTUAL persisted role, never a
+    // hardcoded MEMBER - this is the exact behavior that was broken before
+    // this feature.
+    @Test
+    void getCurrentMember_adminMember_reportsAdminRole() {
+        UUID memberId = UUID.randomUUID();
+        Member member = new Member();
+        member.setId(memberId);
+        member.setEmail("admin@example.com");
+        member.setStatus(MemberStatus.ACTIVE);
+        member.setRole(MemberRole.ADMIN);
+
+        when(memberRepository.findByIdAndDeletedAtIsNull(memberId)).thenReturn(Optional.of(member));
+
+        MemberDto dto = authService.getCurrentMember(memberId);
+
+        assertThat(dto.roles()).containsExactly(Roles.ADMIN);
     }
 
     @Test

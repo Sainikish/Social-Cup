@@ -11,8 +11,8 @@ import com.socialcup.auth.exception.InvalidTokenException;
 import com.socialcup.common.exception.ConflictException;
 import com.socialcup.common.exception.ResourceNotFoundException;
 import com.socialcup.security.JwtTokenProvider;
-import com.socialcup.security.Roles;
 import com.socialcup.user.entity.Member;
+import com.socialcup.user.entity.MemberRole;
 import com.socialcup.user.entity.MemberStatus;
 import com.socialcup.user.repository.MemberRepository;
 import org.springframework.beans.factory.annotation.Value;
@@ -61,6 +61,12 @@ public class AuthService {
         member.setFirstName(request.firstName() != null ? request.firstName().trim() : null);
         member.setLastName(request.lastName() != null ? request.lastName().trim() : null);
         member.setStatus(MemberStatus.VISITOR);
+        // RegisterRequest has no role field at all (nothing client-supplied
+        // could ever reach this line) - explicit here anyway, the same way
+        // status above is explicitly set despite Member.role already
+        // defaulting to MEMBER, so this invariant reads as deliberate rather
+        // than incidental.
+        member.setRole(MemberRole.MEMBER);
 
         Member savedMember = memberRepository.save(member);
         return generateAuthResponse(savedMember);
@@ -135,8 +141,14 @@ public class AuthService {
         memberRepository.save(member);
     }
 
+    // The persisted Member.role is the sole source of truth for this claim -
+    // never a hardcoded value, and never anything read from a request body
+    // or the previous refresh token (refreshToken() above re-reads member
+    // fresh from memberRepository before calling this, so a member promoted
+    // or demoted since their last token was issued gets the CURRENT role on
+    // their very next login or refresh, not a stale one).
     private AuthResponse generateAuthResponse(Member member) {
-        List<String> roles = List.of(Roles.MEMBER);
+        List<String> roles = List.of(member.getRole().name());
         String accessToken = tokenProvider.generateAccessToken(member.getId().toString(), roles);
         String refreshToken = tokenProvider.generateRefreshToken(member.getId().toString());
         MemberDto memberDto = MemberDto.fromEntity(member);

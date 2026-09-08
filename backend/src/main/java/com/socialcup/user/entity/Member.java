@@ -41,6 +41,19 @@ public class Member {
     @Column(nullable = false, length = 50)
     private MemberStatus status = MemberStatus.VISITOR;
 
+    // Authorization role, entirely independent of `status` (membership
+    // lifecycle) above - this is what SecurityConfig's "/admin/**" ->
+    // hasRole(ADMIN) rule and every @PreAuthorize("hasRole('ADMIN')") admin
+    // controller actually check. Defaults to MEMBER so every existing/new
+    // row is MEMBER unless explicitly changed - never settable through
+    // RegisterRequest/LoginRequest (neither DTO has a role field at all) or
+    // any other client-supplied input; the only way to become ADMIN is a
+    // direct, explicit database operation (see V008 migration and
+    // AuthService's own "smallest compatible change" role derivation).
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 50)
+    private MemberRole role = MemberRole.MEMBER;
+
     @Column(name = "coffee_preferences", length = 500)
     private String coffeePreferences;
 
@@ -156,6 +169,14 @@ public class Member {
 
     public void setStatus(MemberStatus status) {
         this.status = status;
+    }
+
+    public MemberRole getRole() {
+        return role;
+    }
+
+    public void setRole(MemberRole role) {
+        this.role = role;
     }
 
     public String getCoffeePreferences() {
