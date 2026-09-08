@@ -4,9 +4,9 @@ The internal admin web app for Social Cup staff: log in with an administrator ac
 manage the platform. **Phase 1** implemented the foundation and authentication. **Phase 2**
 added Cafe Management (create, edit, status change). **Phase 3** added Drink/Menu Management
 (create, edit, status change, per-cafe display). **Phase 4** added Member Management (suspend,
-reactivate). **Phase 5** adds a read-only Subscription list - see below for what this
-deliberately does NOT include, and why. Redemption/payout/audit-log management and dashboard
-metrics are separate, later phases.
+reactivate). **Phase 5** added a read-only Subscription list. **Phase 6** adds Payout
+Management (calculate on-demand reconciliation and view cafe payout history). Redemption/audit-log
+management and dashboard metrics are separate, later phases.
 
 ## Admin authentication
 
@@ -231,6 +231,37 @@ badge always reflects the backend's own `status` field - it is never inferred fr
 No fake or mock subscription data, pagination, search, filtering, or mutation of any kind is
 used anywhere in this app.
 
+## Payout Management (Phase 6)
+
+Entry point: a "Manage Payouts" button on Cafe Detail (`/cafes/:id`), leading to
+`/cafes/:cafeId/payouts`. Requires an authenticated ADMIN session via the same
+`ProtectedRoute` Phase 1 established.
+
+### Endpoints consumed
+
+| Purpose | Endpoint | Notes |
+| --- | --- | --- |
+| Get cafe payouts | `GET /admin/cafes/{cafeId}/payouts` | Admin-only, returns all calculated payouts for the cafe |
+| Calculate payout | `POST /admin/cafes/{cafeId}/payouts` | Admin-only, `CalculatePayoutRequest` (`periodStart`, `periodEnd`) |
+
+### Fields displayed
+
+- **Period**: `periodStart` to `periodEnd` (formatted from `YYYY-MM-DD` strings).
+- **Totals**: `totalRedemptions` and `totalCredits`.
+- **Amount owed**: `amountOwed`, calculated strictly server-side based on snapshot payout rates.
+- **Payment status**: `amountPaid` (shown as paid amount or "Unpaid"), and `paymentReference`.
+
+### Backend limitations (by design, not a bug)
+
+- **Payouts are cafe-scoped only.** The backend exposes `AdminPayoutController` under
+  `/admin/cafes/{cafeId}/payouts`. There is no global un-scoped `/admin/payouts` listing endpoint;
+  payouts are viewed and calculated per cafe, directly accessible from Cafe Detail.
+- **On-demand reconciliation only.** No automated background payouts run. The admin initiates
+  reconciliation for an accounting period by providing `periodStart` and `periodEnd`.
+- **No money is moved client-side.** This records financial amounts owed for human accounting
+  settlement. `amountPaid`, `paymentReference`, and `paymentDate` are nullable and currently
+  not automated by backend services; the app displays them as "Unpaid" without fabricating data.
+
 ## Prerequisites
 
 - Node.js 20+ and npm
@@ -292,10 +323,11 @@ src/
 │   │             # DrinkStatusDialog components (Phase 3)
 │   ├── members/  # member API calls (suspend/reactivate only - no list/search/detail
 │   │             # endpoint exists), types, query keys, hooks, MemberActionDialog (Phase 4)
-│   └── subscriptions/ # a single read-only list call, types, query key, hook (Phase 5) -
-│                 # no mutation, no per-subscription detail
+│   ├── subscriptions/ # a single read-only list call, types, query key, hook (Phase 5) -
+│   │             # no mutation, no per-subscription detail
+│   └── payouts/  # cafe payout API calls, calculation mutation, query keys, hooks (Phase 6)
 ├── routes/       # AppRouter, ProtectedRoute, PublicRoute
-├── screens/      # Login, Dashboard, CafeList, CafeCreate, CafeDetail,
+├── screens/      # Login, Dashboard, CafeList, CafeCreate, CafeDetail, CafePayouts,
 │                 # DrinkList, DrinkCreate, DrinkDetail, MemberLookup, MemberDetail,
 │                 # SubscriptionList
 ├── types/        # shared ApiError/PageResponse shapes

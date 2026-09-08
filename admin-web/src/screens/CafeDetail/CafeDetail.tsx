@@ -196,6 +196,22 @@ export function CafeDetail() {
         )}
       </section>
 
+      <section className={styles.section}>
+        <div className={styles.drinksSectionHeader}>
+          <h2 className={styles.sectionTitle}>Payouts</h2>
+          <div className={styles.drinkActions}>
+            <Button
+              label="Manage Payouts"
+              variant="outline"
+              onClick={() => navigate(`/cafes/${id}/payouts`, { state: { cafeName: detail.name } })}
+            />
+          </div>
+        </div>
+        <p className={styles.noticeText}>
+          Calculate on-demand payouts and view payment reconciliation history for this cafe.
+        </p>
+      </section>
+
       {!payoutRateKnown ? (
         <Card className={styles.notice}>
           <p className={styles.noticeText}>

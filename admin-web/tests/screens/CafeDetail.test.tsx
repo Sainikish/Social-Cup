@@ -323,6 +323,7 @@ describe('CafeDetail - Phase 3 drinks integration', () => {
 
     expect(screen.getByText('Manage Drinks')).toBeInTheDocument();
     expect(screen.getByText('Add Drink')).toBeInTheDocument();
+    expect(screen.getByText('Manage Payouts')).toBeInTheDocument();
     expect(screen.getByText('Save Changes')).toBeInTheDocument();
     expect(screen.getByText('Set INACTIVE')).toBeInTheDocument();
     expect(screen.getByText('Set ARCHIVED')).toBeInTheDocument();

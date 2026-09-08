@@ -10,6 +10,7 @@ import { DrinkList } from '../screens/DrinkList/DrinkList';
 import { Login } from '../screens/Login/Login';
 import { MemberDetail } from '../screens/MemberDetail/MemberDetail';
 import { MemberLookup } from '../screens/MemberLookup/MemberLookup';
+import { CafePayouts } from '../screens/CafePayouts/CafePayouts';
 import { SubscriptionList } from '../screens/SubscriptionList/SubscriptionList';
 import { ProtectedRoute } from './ProtectedRoute';
 import { PublicRoute } from './PublicRoute';
@@ -70,6 +71,14 @@ export function AppRouter() {
         element={
           <ProtectedRoute>
             <DrinkCreate />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/cafes/:cafeId/payouts"
+        element={
+          <ProtectedRoute>
+            <CafePayouts />
           </ProtectedRoute>
         }
       />
