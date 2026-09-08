@@ -1,0 +1,81 @@
+/* Same palette/spacing/type-scale values as mobile/src/theme (colors.ts,
+   spacing.ts, typography.ts) - not shared code (no monorepo package exists
+   to share it through), just the same numbers, so the two Social Cup
+   frontends read as one product. */
+:root {
+  color-scheme: light;
+
+  --color-background: #fbf7f2;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f3ece4;
+  --color-border: #e8ded2;
+
+  --color-text-primary: #241812;
+  --color-text-secondary: #6f6259;
+  --color-text-muted: #a69a8e;
+  --color-text-inverse: #ffffff;
+
+  --color-primary: #4a2e1f;
+  --color-primary-muted: #7a5a45;
+  --color-on-primary: #ffffff;
+
+  --color-accent: #c97c3d;
+
+  --color-success: #2f9e5b;
+  --color-success-surface: #eaf7ef;
+  --color-danger: #c74b3f;
+  --color-danger-surface: #fceeec;
+  --color-warning: #d69a3a;
+
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+  --spacing-xxl: 48px;
+
+  --radius-md: 12px;
+  --radius-lg: 20px;
+
+  --font-size-sm: 14px;
+  --font-size-md: 16px;
+  --font-size-lg: 20px;
+  --font-size-xl: 28px;
+  --font-size-xxl: 36px;
+
+  /* 44px is the standard minimum comfortable touch-target size (Apple HIG /
+     WCAG 2.5.5) - every interactive control in this app is built to at
+     least this height. */
+  --touch-target-min: 44px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  /* 16px minimum on inputs/body text avoids iOS Safari's automatic zoom-on-
+     focus for form fields smaller than that. */
+  font-size: var(--font-size-md);
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  background-color: var(--color-background);
+  color: var(--color-text-primary);
+  -webkit-tap-highlight-color: transparent;
+}
+
+button,
+input {
+  font-family: inherit;
+}
