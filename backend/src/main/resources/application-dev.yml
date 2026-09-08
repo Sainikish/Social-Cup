@@ -25,5 +25,6 @@ app:
       secret: dev-secret-key-change-in-production
   stripe:
     api-key: sk_test_dev_key
+    price-id: price_test_dev_key
   sentry:
     enabled: false

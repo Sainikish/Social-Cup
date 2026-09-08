@@ -14,6 +14,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -21,6 +22,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -157,6 +159,51 @@ class CreditServiceTest {
         when(memberRepository.findByIdAndDeletedAtIsNull(MEMBER_ID)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> creditService.grantMonthlyCredits(MEMBER_ID, "subscription-1"))
+            .isInstanceOf(ResourceNotFoundException.class);
+
+        verify(creditLedgerRepository, never()).save(any());
+    }
+
+    // ---- Reset and grant (Phase E: subscription renewal, non-rollover) ----
+
+    @Test
+    void resetAndGrantMonthlyCredits_withNoExistingBalance_onlyInsertsTheGrant_noExpirationRow() {
+        Member member = newMember(MEMBER_ID);
+        when(memberRepository.findByIdAndDeletedAtIsNullForUpdate(MEMBER_ID)).thenReturn(Optional.of(member));
+        when(creditLedgerRepository.sumAmountByMemberId(MEMBER_ID)).thenReturn(0L);
+        ArgumentCaptor<CreditLedger> captor = ArgumentCaptor.forClass(CreditLedger.class);
+        when(creditLedgerRepository.save(captor.capture())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        creditService.resetAndGrantMonthlyCredits(MEMBER_ID, "subscription-1");
+
+        verify(creditLedgerRepository, times(1)).save(any(CreditLedger.class));
+        assertThat(captor.getValue().getType()).isEqualTo(CreditLedgerType.MONTHLY_GRANT);
+        assertThat(captor.getValue().getAmount()).isEqualTo(30);
+    }
+
+    @Test
+    void resetAndGrantMonthlyCredits_withALeftoverBalance_expiresItBeforeGranting_enforcingNonRollover() {
+        Member member = newMember(MEMBER_ID);
+        when(memberRepository.findByIdAndDeletedAtIsNullForUpdate(MEMBER_ID)).thenReturn(Optional.of(member));
+        when(creditLedgerRepository.sumAmountByMemberId(MEMBER_ID)).thenReturn(12L);
+        ArgumentCaptor<CreditLedger> captor = ArgumentCaptor.forClass(CreditLedger.class);
+        when(creditLedgerRepository.save(captor.capture())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        creditService.resetAndGrantMonthlyCredits(MEMBER_ID, "subscription-1");
+
+        verify(creditLedgerRepository, times(2)).save(any(CreditLedger.class));
+        List<CreditLedger> saved = captor.getAllValues();
+        assertThat(saved.get(0).getType()).isEqualTo(CreditLedgerType.EXPIRATION);
+        assertThat(saved.get(0).getAmount()).isEqualTo(-12);
+        assertThat(saved.get(1).getType()).isEqualTo(CreditLedgerType.MONTHLY_GRANT);
+        assertThat(saved.get(1).getAmount()).isEqualTo(30);
+    }
+
+    @Test
+    void resetAndGrantMonthlyCredits_forUnknownMember_throwsResourceNotFound() {
+        when(memberRepository.findByIdAndDeletedAtIsNullForUpdate(MEMBER_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> creditService.resetAndGrantMonthlyCredits(MEMBER_ID, "subscription-1"))
             .isInstanceOf(ResourceNotFoundException.class);
 
         verify(creditLedgerRepository, never()).save(any());

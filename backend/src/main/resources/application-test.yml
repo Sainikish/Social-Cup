@@ -31,5 +31,6 @@ app:
       secret: test-secret-key
   stripe:
     api-key: sk_test_dummy
+    price-id: price_test_dummy
   sentry:
     enabled: false

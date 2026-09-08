@@ -80,6 +80,37 @@ public class CreditService {
         return creditLedgerRepository.save(entry);
     }
 
+    // Phase E: called only from the Stripe webhook handler on a confirmed
+    // invoice.payment_succeeded event - never client-triggered. Locks the
+    // member row (same findByIdAndDeletedAtIsNullForUpdate convention as
+    // deductForRedemption), zeroes any existing balance with an EXPIRATION
+    // entry (skipped if already zero - no pointless zero-amount ledger
+    // rows), then grants the new period's MONTHLY_GRANT. Both entries
+    // commit atomically with the caller's surrounding @Transactional
+    // webhook-processing method - this method itself joins that same
+    // transaction rather than starting a new one.
+    public void resetAndGrantMonthlyCredits(UUID memberId, String reference) {
+        Member member = memberRepository.findByIdAndDeletedAtIsNullForUpdate(memberId)
+            .orElseThrow(() -> new ResourceNotFoundException("Member not found with id: " + memberId));
+
+        long balance = currentBalance(memberId);
+        if (balance > 0) {
+            CreditLedger expiration = new CreditLedger();
+            expiration.setMember(member);
+            expiration.setAmount((int) -balance);
+            expiration.setType(CreditLedgerType.EXPIRATION);
+            expiration.setReference(reference);
+            creditLedgerRepository.save(expiration);
+        }
+
+        CreditLedger grant = new CreditLedger();
+        grant.setMember(member);
+        grant.setAmount(MONTHLY_GRANT_AMOUNT);
+        grant.setType(CreditLedgerType.MONTHLY_GRANT);
+        grant.setReference(reference);
+        creditLedgerRepository.save(grant);
+    }
+
     private long currentBalance(UUID memberId) {
         Long sum = creditLedgerRepository.sumAmountByMemberId(memberId);
         return sum != null ? sum : 0L;

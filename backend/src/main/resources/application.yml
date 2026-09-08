@@ -99,6 +99,7 @@ app:
   stripe:
     api-key: ${STRIPE_API_KEY:sk_test_placeholder}
     webhook-secret: ${STRIPE_WEBHOOK_SECRET:whsec_placeholder}
+    price-id: ${STRIPE_PRICE_ID:price_test_placeholder}
   aws:
     region: ${AWS_REGION:us-east-1}
     s3:

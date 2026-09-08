@@ -1,5 +1,6 @@
 package com.socialcup.config;
 
+import com.socialcup.admin.repository.AuditLogRepository;
 import com.socialcup.barista.entity.CafePin;
 import com.socialcup.barista.repository.CafePinRepository;
 import com.socialcup.cafe.entity.Cafe;
@@ -7,10 +8,13 @@ import com.socialcup.cafe.entity.CafeStatus;
 import com.socialcup.cafe.repository.CafeRepository;
 import com.socialcup.credit.repository.CreditLedgerRepository;
 import com.socialcup.drink.repository.DrinkRepository;
+import com.socialcup.payout.repository.PayoutRepository;
 import com.socialcup.rating.repository.RatingRepository;
 import com.socialcup.redemption.repository.RedemptionCodeRepository;
 import com.socialcup.redemption.repository.RedemptionRepository;
 import com.socialcup.security.JwtTokenProvider;
+import com.socialcup.subscription.repository.ProcessedWebhookEventRepository;
+import com.socialcup.subscription.repository.SubscriptionRepository;
 import com.socialcup.security.Roles;
 import com.socialcup.user.repository.MemberRepository;
 import io.jsonwebtoken.Claims;
@@ -92,6 +96,18 @@ class BaristaSecurityIntegrationTest {
 
     @MockitoBean
     private RedemptionRepository redemptionRepository;
+
+    @MockitoBean
+    private SubscriptionRepository subscriptionRepository;
+
+    @MockitoBean
+    private ProcessedWebhookEventRepository processedWebhookEventRepository;
+
+    @MockitoBean
+    private AuditLogRepository auditLogRepository;
+
+    @MockitoBean
+    private PayoutRepository payoutRepository;
 
     @Test
     void baristaLoginIsPublic_andReturnsAWorkingBaristaTokenOnSuccess() throws Exception {

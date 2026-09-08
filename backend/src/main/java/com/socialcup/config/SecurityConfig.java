@@ -39,7 +39,11 @@ public class SecurityConfig {
         // public rather than gated - the refresh token in the request body
         // IS the credential for both of these.
         "/barista/login",
-        "/barista/refresh"
+        "/barista/refresh",
+        // Stripe cannot present a member/barista JWT - authenticity comes
+        // entirely from Stripe-Signature verification inside
+        // StripeWebhookController, not from role gating here.
+        "/webhooks/stripe"
     };
 
     // GET-only: reads under /cafes and /drinks are public, matching this
