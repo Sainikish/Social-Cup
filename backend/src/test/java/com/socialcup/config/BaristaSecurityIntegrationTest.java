@@ -9,6 +9,7 @@ import com.socialcup.credit.repository.CreditLedgerRepository;
 import com.socialcup.drink.repository.DrinkRepository;
 import com.socialcup.rating.repository.RatingRepository;
 import com.socialcup.redemption.repository.RedemptionCodeRepository;
+import com.socialcup.redemption.repository.RedemptionRepository;
 import com.socialcup.security.JwtTokenProvider;
 import com.socialcup.security.Roles;
 import com.socialcup.user.repository.MemberRepository;
@@ -88,6 +89,9 @@ class BaristaSecurityIntegrationTest {
     // already added here to avoid.
     @MockitoBean
     private RedemptionCodeRepository redemptionCodeRepository;
+
+    @MockitoBean
+    private RedemptionRepository redemptionRepository;
 
     @Test
     void baristaLoginIsPublic_andReturnsAWorkingBaristaTokenOnSuccess() throws Exception {
