@@ -4,9 +4,13 @@ import { Link, useLocation, useParams } from 'react-router-dom';
 import { toApiError } from '../../api/client';
 import { Button, Card, ErrorState, Input, LoadingState } from '../../components';
 import {
+  MarkPayoutPaidDialog,
   payoutErrorMessage,
+  toMarkPayoutPaidRequest,
   useCalculatePayoutMutation,
+  useMarkPayoutPaidMutation,
   usePayoutsByCafeQuery,
+  validateMarkPayoutPaidForm,
   type PayoutResponse,
 } from '../../features/payouts';
 import { extractFieldErrors } from '../../utils/errors';
@@ -35,11 +39,66 @@ export function CafePayouts() {
   const [formError, setFormError] = useState<string | undefined>();
   const [latestCalculated, setLatestCalculated] = useState<PayoutResponse | null>(null);
 
+  const [dialogPayout, setDialogPayout] = useState<PayoutResponse | null>(null);
+  const [markPaidFieldErrors, setMarkPaidFieldErrors] = useState<Record<string, string>>({});
+  const [markPaidError, setMarkPaidError] = useState<string | undefined>();
+  const [markPaidSuccessMessage, setMarkPaidSuccessMessage] = useState<string | undefined>();
+
   const payoutsQuery = usePayoutsByCafeQuery(cafeId);
   const calculateMutation = useCalculatePayoutMutation();
+  const markPaidMutation = useMarkPayoutPaidMutation();
 
   if (!cafeId) {
     return <ErrorState message="No cafe was specified." />;
+  }
+
+  function openMarkPaidDialog(payout: PayoutResponse) {
+    setMarkPaidError(undefined);
+    setMarkPaidFieldErrors({});
+    setMarkPaidSuccessMessage(undefined);
+    setDialogPayout(payout);
+  }
+
+  function closeMarkPaidDialog() {
+    setDialogPayout(null);
+    setMarkPaidError(undefined);
+    setMarkPaidFieldErrors({});
+  }
+
+  function handleMarkPaidConfirm(values: { amountPaid: string; paymentReference: string; paymentDate: string }) {
+    if (!dialogPayout) {
+      return;
+    }
+    setMarkPaidError(undefined);
+
+    const errors = validateMarkPayoutPaidForm(values);
+    setMarkPaidFieldErrors(errors);
+    if (Object.keys(errors).length > 0) {
+      return;
+    }
+
+    markPaidMutation.mutate(
+      {
+        cafeId: dialogPayout.cafeId,
+        payoutId: dialogPayout.id,
+        request: toMarkPayoutPaidRequest(values),
+      },
+      {
+        onSuccess: () => {
+          setDialogPayout(null);
+          setMarkPaidSuccessMessage('Payout marked as paid successfully.');
+        },
+        onError: (error) => {
+          const apiError = toApiError(error);
+          const violations = extractFieldErrors(apiError);
+          if (Object.keys(violations).length > 0) {
+            setMarkPaidFieldErrors(violations);
+            return;
+          }
+          setMarkPaidError(payoutErrorMessage(apiError.code));
+        },
+      }
+    );
   }
 
   function handleCalculateSubmit(e: FormEvent) {
@@ -160,6 +219,12 @@ export function CafePayouts() {
       <section className={styles.card}>
         <h2 className={styles.sectionTitle}>Payout History</h2>
 
+        {markPaidSuccessMessage ? (
+          <p className={styles.successMessage} role="status">
+            {markPaidSuccessMessage}
+          </p>
+        ) : null}
+
         {payoutsQuery.isLoading ? <LoadingState label="Loading payouts…" /> : null}
 
         {payoutsQuery.isError ? (
@@ -184,6 +249,7 @@ export function CafePayouts() {
                   <th>Amount Owed</th>
                   <th>Payment Status</th>
                   <th>Reference</th>
+                  <th>Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -199,10 +265,26 @@ export function CafePayouts() {
                       {payout.amountPaid != null ? (
                         <span className={styles.paidBadge}>${payout.amountPaid.toFixed(2)} paid</span>
                       ) : (
-                        <span className={styles.unpaidBadge}>Unpaid</span>
+                        <span className={styles.notRecordedBadge} title="The backend does not currently record payment status for a payout - this is not the same as confirmed unpaid.">
+                          Not recorded
+                        </span>
                       )}
                     </td>
                     <td>{payout.paymentReference ?? '—'}</td>
+                    <td>
+                      {payout.amountPaid == null ? (
+                        <button
+                          type="button"
+                          className={styles.markPaidButton}
+                          onClick={() => openMarkPaidDialog(payout)}
+                          disabled={markPaidMutation.isPending}
+                        >
+                          Mark Paid
+                        </button>
+                      ) : (
+                        <span className={styles.noticeText}>—</span>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -210,6 +292,16 @@ export function CafePayouts() {
           </div>
         ) : null}
       </section>
+
+      <MarkPayoutPaidDialog
+        open={dialogPayout !== null}
+        payout={dialogPayout}
+        isSubmitting={markPaidMutation.isPending}
+        errorMessage={markPaidError}
+        fieldErrors={markPaidFieldErrors}
+        onConfirm={handleMarkPaidConfirm}
+        onCancel={closeMarkPaidDialog}
+      />
     </div>
   );
 }

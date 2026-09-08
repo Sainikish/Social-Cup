@@ -11,6 +11,7 @@ import { Login } from '../screens/Login/Login';
 import { MemberDetail } from '../screens/MemberDetail/MemberDetail';
 import { MemberLookup } from '../screens/MemberLookup/MemberLookup';
 import { CafePayouts } from '../screens/CafePayouts/CafePayouts';
+import { PayoutList } from '../screens/PayoutList/PayoutList';
 import { SubscriptionList } from '../screens/SubscriptionList/SubscriptionList';
 import { ProtectedRoute } from './ProtectedRoute';
 import { PublicRoute } from './PublicRoute';
@@ -111,6 +112,14 @@ export function AppRouter() {
         element={
           <ProtectedRoute>
             <SubscriptionList />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/payouts"
+        element={
+          <ProtectedRoute>
+            <PayoutList />
           </ProtectedRoute>
         }
       />

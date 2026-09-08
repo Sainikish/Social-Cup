@@ -3,13 +3,15 @@ import { render, screen } from '@testing-library/react';
 import type { ReactElement } from 'react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 
-import { getPayoutsForCafe } from '../../src/features/payouts/api';
+import { getAllPayouts, getPayoutsForCafe } from '../../src/features/payouts/api';
 import type { PayoutResponse } from '../../src/features/payouts/types';
 import { CafePayouts } from '../../src/screens/CafePayouts/CafePayouts';
+import { PayoutList } from '../../src/screens/PayoutList/PayoutList';
 
 vi.mock('../../src/features/payouts/api');
 
 const mockGetPayoutsForCafe = vi.mocked(getPayoutsForCafe);
+const mockGetAllPayouts = vi.mocked(getAllPayouts);
 
 const PAYOUT: PayoutResponse = {
   id: 'payout-1',
@@ -57,6 +59,7 @@ function renderAt(width: number, path: string, routePath: string, ui: ReactEleme
 beforeEach(() => {
   vi.clearAllMocks();
   mockGetPayoutsForCafe.mockResolvedValue([PAYOUT]);
+  mockGetAllPayouts.mockResolvedValue([PAYOUT]);
 });
 
 describe.each([1024, 768])('payout screens at %ipx', (width) => {
@@ -66,5 +69,12 @@ describe.each([1024, 768])('payout screens at %ipx', (width) => {
     expect(screen.getByText('Payouts', { selector: 'h1' })).toBeInTheDocument();
     expect(screen.getByText('Calculate Payout', { selector: 'h2' })).toBeInTheDocument();
     expect(await screen.findByText('$60.00')).toBeInTheDocument();
+  });
+
+  it('PayoutList renders its key content without crashing', async () => {
+    renderAt(width, '/payouts', '/payouts', <PayoutList />);
+
+    expect(screen.getByText('Payouts', { selector: 'h1' })).toBeInTheDocument();
+    expect(await screen.findByText('cafe-1')).toBeInTheDocument();
   });
 });

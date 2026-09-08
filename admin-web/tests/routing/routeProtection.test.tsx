@@ -5,6 +5,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { useAuth } from '../../src/auth/AuthContext';
 import type { AdminUser, AuthContextValue } from '../../src/auth/types';
 import { getDrinksByCafe } from '../../src/features/drinks/api';
+import { getAllPayouts, getPayoutsForCafe } from '../../src/features/payouts/api';
 import { AppRouter } from '../../src/routes/AppRouter';
 
 vi.mock('../../src/auth/AuthContext', async () => {
@@ -12,9 +13,12 @@ vi.mock('../../src/auth/AuthContext', async () => {
   return { ...actual, useAuth: vi.fn() };
 });
 vi.mock('../../src/features/drinks/api');
+vi.mock('../../src/features/payouts/api');
 
 const mockUseAuth = vi.mocked(useAuth);
 const mockGetDrinksByCafe = vi.mocked(getDrinksByCafe);
+const mockGetPayoutsForCafe = vi.mocked(getPayoutsForCafe);
+const mockGetAllPayouts = vi.mocked(getAllPayouts);
 
 function adminUser(overrides: Partial<AdminUser> = {}): AdminUser {
   return {
@@ -208,5 +212,61 @@ describe('route protection', () => {
     renderAt('/cafes/cafe-1/drinks/new');
 
     expect(screen.getByLabelText('Email')).toBeInTheDocument();
+  });
+
+  it('lets an ADMIN reach /cafes/:cafeId/payouts', async () => {
+    mockGetPayoutsForCafe.mockResolvedValue([]);
+    mockUseAuth.mockReturnValue(authValue({ isAuthenticated: true, user: adminUser() }));
+
+    renderAt('/cafes/cafe-1/payouts');
+
+    expect(await screen.findByText('Payouts', { selector: 'h1' })).toBeInTheDocument();
+    expect(screen.queryByLabelText('Email')).not.toBeInTheDocument();
+  });
+
+  it('denies a MEMBER access to /cafes/:cafeId/payouts, redirecting to /login', () => {
+    mockUseAuth.mockReturnValue(authValue({ isAuthenticated: true, user: adminUser({ roles: ['MEMBER'] }) }));
+
+    renderAt('/cafes/cafe-1/payouts');
+
+    expect(screen.getByLabelText('Email')).toBeInTheDocument();
+    expect(mockGetPayoutsForCafe).not.toHaveBeenCalled();
+  });
+
+  it('redirects an anonymous user away from /cafes/:cafeId/payouts to /login', () => {
+    mockUseAuth.mockReturnValue(authValue({ isAuthenticated: false, user: null }));
+
+    renderAt('/cafes/cafe-1/payouts');
+
+    expect(screen.getByLabelText('Email')).toBeInTheDocument();
+    expect(mockGetPayoutsForCafe).not.toHaveBeenCalled();
+  });
+
+  it('lets an ADMIN reach /payouts', async () => {
+    mockGetAllPayouts.mockResolvedValue([]);
+    mockUseAuth.mockReturnValue(authValue({ isAuthenticated: true, user: adminUser() }));
+
+    renderAt('/payouts');
+
+    expect(await screen.findByText('No payouts found.')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Email')).not.toBeInTheDocument();
+  });
+
+  it('denies a MEMBER access to /payouts, redirecting to /login', () => {
+    mockUseAuth.mockReturnValue(authValue({ isAuthenticated: true, user: adminUser({ roles: ['MEMBER'] }) }));
+
+    renderAt('/payouts');
+
+    expect(screen.getByLabelText('Email')).toBeInTheDocument();
+    expect(mockGetAllPayouts).not.toHaveBeenCalled();
+  });
+
+  it('redirects an anonymous user away from /payouts to /login', () => {
+    mockUseAuth.mockReturnValue(authValue({ isAuthenticated: false, user: null }));
+
+    renderAt('/payouts');
+
+    expect(screen.getByLabelText('Email')).toBeInTheDocument();
+    expect(mockGetAllPayouts).not.toHaveBeenCalled();
   });
 });

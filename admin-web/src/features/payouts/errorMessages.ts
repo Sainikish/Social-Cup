@@ -6,6 +6,13 @@ export function payoutErrorMessage(code: string): string {
       return 'Please check the date range and try again.';
     case 'RESOURCE_NOT_FOUND':
       return 'This cafe could not be found.';
+    // CONFLICT covers two distinct backend scenarios with the same code -
+    // a duplicate payout period on calculate, and an already-paid payout on
+    // mark-paid. The message stays generic on purpose rather than guessing
+    // which one applies, matching the convention of never branching on the
+    // human-readable message.
+    case 'CONFLICT':
+      return 'This action could not be completed because of a conflict with existing data. Refresh and try again.';
     case 'UNAUTHENTICATED':
       return 'Your session has expired. Please log in again.';
     case 'ACCESS_DENIED':

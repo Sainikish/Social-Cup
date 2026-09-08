@@ -26,3 +26,14 @@ export interface CalculatePayoutRequest {
   periodStart: string;
   periodEnd: string;
 }
+
+// Mirrors com.socialcup.payout.dto.MarkPayoutPaidRequest exactly - the ONLY
+// three fields PATCH /admin/cafes/{cafeId}/payouts/{payoutId} accepts.
+// There is no field here for amountOwed, totalRedemptions, totalCredits,
+// periodStart/periodEnd, or cafe - the request DTO structurally cannot
+// carry them, and this app never adds one.
+export interface MarkPayoutPaidRequest {
+  amountPaid: number;
+  paymentReference: string;
+  paymentDate: string;
+}

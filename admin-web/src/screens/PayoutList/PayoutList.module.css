@@ -4,42 +4,13 @@
   flex-direction: column;
   gap: var(--spacing-lg);
   padding: var(--spacing-xl);
-  max-width: 1100px;
+  max-width: 1200px;
   margin: 0 auto;
-}
-
-.breadcrumbs {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-xs);
-}
-
-.breadcrumbs a {
-  color: var(--color-primary);
-  text-decoration: none;
-}
-
-.breadcrumbs a:hover {
-  text-decoration: underline;
-}
-
-.header {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-xs);
 }
 
 .title {
   font-size: var(--font-size-xl);
   font-weight: 700;
-  margin: 0;
-}
-
-.subtitle {
-  font-size: var(--font-size-md);
-  color: var(--color-text-secondary);
   margin: 0;
 }
 
@@ -50,42 +21,6 @@
 .noticeText {
   font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
-  margin: 0;
-}
-
-.card {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-md);
-}
-
-.sectionTitle {
-  font-size: var(--font-size-lg);
-  font-weight: 600;
-  margin: 0;
-}
-
-.form {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-md);
-}
-
-.dateInputsRow {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--spacing-md);
-}
-
-.formActions {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-md);
-}
-
-.formError {
-  font-size: var(--font-size-sm);
-  color: var(--color-danger);
   margin: 0;
 }
 
@@ -177,9 +112,5 @@
 @media (max-width: 768px) {
   .container {
     padding: var(--spacing-lg);
-  }
-
-  .dateInputsRow {
-    grid-template-columns: 1fr;
   }
 }

@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 
-import { calculatePayout, getPayoutsForCafe } from '../../src/features/payouts/api';
+import { calculatePayout, getPayoutsForCafe, markPayoutPaid } from '../../src/features/payouts/api';
 import type { PayoutResponse } from '../../src/features/payouts/types';
 import { CafePayouts } from '../../src/screens/CafePayouts/CafePayouts';
 
@@ -10,6 +10,7 @@ vi.mock('../../src/features/payouts/api');
 
 const mockGetPayoutsForCafe = vi.mocked(getPayoutsForCafe);
 const mockCalculatePayout = vi.mocked(calculatePayout);
+const mockMarkPayoutPaid = vi.mocked(markPayoutPaid);
 
 const SAMPLE_PAYOUT: PayoutResponse = {
   id: 'payout-1',
@@ -62,7 +63,12 @@ describe('CafePayouts', () => {
     expect(await screen.findByText('$168.00')).toBeInTheDocument();
     expect(screen.getByText('42')).toBeInTheDocument();
     expect(screen.getByText('84')).toBeInTheDocument();
-    expect(screen.getByText('Unpaid')).toBeInTheDocument();
+    expect(screen.getByText('Not recorded')).toBeInTheDocument();
+    // The backend never actually writes amountPaid/paymentReference/paymentDate
+    // (see the Phase 6 backend inspection) - null must never be presented as a
+    // confirmed "Unpaid" status, since that would assert a fact the backend
+    // does not track.
+    expect(screen.queryByText('Unpaid')).not.toBeInTheDocument();
     expect(mockGetPayoutsForCafe).toHaveBeenCalledWith('cafe-1');
   });
 
@@ -150,5 +156,67 @@ describe('CafePayouts', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Calculate Payout' }));
 
     expect(await screen.findByText('This cafe could not be found.')).toBeInTheDocument();
+  });
+
+  it('offers Mark Paid for an unpaid payout and opens the confirmation dialog', async () => {
+    mockGetPayoutsForCafe.mockResolvedValue([SAMPLE_PAYOUT]);
+    renderScreen();
+
+    await screen.findByText('$168.00');
+    fireEvent.click(screen.getByText('Mark Paid'));
+
+    expect(screen.getByText('Mark Payout Paid')).toBeInTheDocument();
+    expect(mockMarkPayoutPaid).not.toHaveBeenCalled();
+  });
+
+  it('confirms mark-paid and shows success only after the backend responds', async () => {
+    mockGetPayoutsForCafe.mockResolvedValue([SAMPLE_PAYOUT]);
+    mockMarkPayoutPaid.mockResolvedValue({ ...SAMPLE_PAYOUT, amountPaid: 168.0, paymentReference: 'ACH-1', paymentDate: '2026-09-01' });
+    renderScreen();
+
+    await screen.findByText('$168.00');
+    fireEvent.click(screen.getByText('Mark Paid'));
+    fireEvent.change(screen.getByLabelText('Amount Paid'), { target: { value: '168.00' } });
+    fireEvent.change(screen.getByLabelText('Payment Reference'), { target: { value: 'ACH-1' } });
+    fireEvent.change(screen.getByLabelText('Payment Date'), { target: { value: '2026-09-01' } });
+    fireEvent.click(screen.getByText('Confirm'));
+
+    expect(await screen.findByText('Payout marked as paid successfully.')).toBeInTheDocument();
+    expect(mockMarkPayoutPaid).toHaveBeenCalledWith('cafe-1', 'payout-1', {
+      amountPaid: 168.0,
+      paymentReference: 'ACH-1',
+      paymentDate: '2026-09-01',
+    });
+  });
+
+  it('shows a 409 conflict message without assuming success', async () => {
+    mockGetPayoutsForCafe.mockResolvedValue([SAMPLE_PAYOUT]);
+    mockMarkPayoutPaid.mockRejectedValue({
+      isAxiosError: true,
+      response: { status: 409, data: { code: 'CONFLICT', message: 'Payout has already been marked as paid' } },
+      toJSON: () => ({}),
+    });
+    renderScreen();
+
+    await screen.findByText('$168.00');
+    fireEvent.click(screen.getByText('Mark Paid'));
+    fireEvent.change(screen.getByLabelText('Amount Paid'), { target: { value: '168.00' } });
+    fireEvent.change(screen.getByLabelText('Payment Reference'), { target: { value: 'ACH-1' } });
+    fireEvent.change(screen.getByLabelText('Payment Date'), { target: { value: '2026-09-01' } });
+    fireEvent.click(screen.getByText('Confirm'));
+
+    expect(
+      await screen.findByText('This action could not be completed because of a conflict with existing data. Refresh and try again.')
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Payout marked as paid successfully.')).not.toBeInTheDocument();
+  });
+
+  it('does not offer Mark Paid for an already-paid payout', async () => {
+    const paidPayout: PayoutResponse = { ...SAMPLE_PAYOUT, amountPaid: 168.0, paymentReference: 'ACH-9988' };
+    mockGetPayoutsForCafe.mockResolvedValue([paidPayout]);
+    renderScreen();
+
+    await screen.findByText('$168.00 paid');
+    expect(screen.queryByText('Mark Paid')).not.toBeInTheDocument();
   });
 });

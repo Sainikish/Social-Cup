@@ -231,36 +231,67 @@ badge always reflects the backend's own `status` field - it is never inferred fr
 No fake or mock subscription data, pagination, search, filtering, or mutation of any kind is
 used anywhere in this app.
 
-## Payout Management (Phase 6)
+## Payout Management (Phase 6 / 6B)
 
-Entry point: a "Manage Payouts" button on Cafe Detail (`/cafes/:id`), leading to
-`/cafes/:cafeId/payouts`. Requires an authenticated ADMIN session via the same
-`ProtectedRoute` Phase 1 established.
+Entry points: a "Manage Payouts" button on Cafe Detail (`/cafes/:id`), leading to the
+cafe-scoped `/cafes/:cafeId/payouts` screen (calculate a payout, view that cafe's history), and
+a "Manage Payouts" button on the Dashboard, leading to `/payouts` - a read/action screen across
+every cafe. Both require an authenticated ADMIN session via the same `ProtectedRoute` Phase 1
+established.
 
 ### Endpoints consumed
 
 | Purpose | Endpoint | Notes |
 | --- | --- | --- |
-| Get cafe payouts | `GET /admin/cafes/{cafeId}/payouts` | Admin-only, returns all calculated payouts for the cafe |
-| Calculate payout | `POST /admin/cafes/{cafeId}/payouts` | Admin-only, `CalculatePayoutRequest` (`periodStart`, `periodEnd`) |
+| Get one cafe's payouts | `GET /admin/cafes/{cafeId}/payouts` | Admin-only, all calculated payouts for that cafe |
+| Calculate a payout | `POST /admin/cafes/{cafeId}/payouts` | Admin-only, `CalculatePayoutRequest` (`periodStart`, `periodEnd`) |
+| Get every payout, across all cafes | `GET /admin/payouts` | Admin-only, flat unpaginated array, no query parameters |
+| Mark a payout paid | `PATCH /admin/cafes/{cafeId}/payouts/{payoutId}` | Admin-only, `MarkPayoutPaidRequest` (`amountPaid`, `paymentReference`, `paymentDate`) |
 
 ### Fields displayed
 
+- **Cafe**: on the cross-cafe screen, `cafeId` linked to that cafe's own detail screen (there is
+  no cafe name on `PayoutResponse` - see below).
 - **Period**: `periodStart` to `periodEnd` (formatted from `YYYY-MM-DD` strings).
 - **Totals**: `totalRedemptions` and `totalCredits`.
-- **Amount owed**: `amountOwed`, calculated strictly server-side based on snapshot payout rates.
-- **Payment status**: `amountPaid` (shown as paid amount or "Unpaid"), and `paymentReference`.
+- **Amount owed**: `amountOwed`, calculated strictly server-side based on snapshot payout rates -
+  never recalculated or edited client-side, on either screen.
+- **Payment status**: `amountPaid` shown as a paid amount when present; when `null`, shown as
+  "Not recorded" - **never** "Unpaid" (a payout the backend has never had a payment recorded
+  against is not the same as one confirmed unpaid), and `paymentReference` shown verbatim or as
+  "—" when absent.
+
+### Mark Payout Paid
+
+Available from both payout screens, on any payout whose `amountPaid` is still `null`. The
+confirmation dialog collects exactly the three fields `MarkPayoutPaidRequest` accepts - amount
+paid, payment reference, payment date - with presentational validation mirroring the backend's
+own declared constraints (amount not negative, reference required and ≤255 characters, date
+required). Nothing else is editable: `amountOwed`, `totalRedemptions`, `totalCredits`,
+`periodStart`, `periodEnd`, and the owning cafe are shown as read-only context only, are never
+sent in the request, and the request DTO has no field for any of them even if this app tried.
+The UI never assumes success before the backend responds; a 409 (already marked paid) or 404
+(unknown cafe/payout) is shown inline without closing the dialog or changing the displayed
+payout.
 
 ### Backend limitations (by design, not a bug)
 
-- **Payouts are cafe-scoped only.** The backend exposes `AdminPayoutController` under
-  `/admin/cafes/{cafeId}/payouts`. There is no global un-scoped `/admin/payouts` listing endpoint;
-  payouts are viewed and calculated per cafe, directly accessible from Cafe Detail.
 - **On-demand reconciliation only.** No automated background payouts run. The admin initiates
   reconciliation for an accounting period by providing `periodStart` and `periodEnd`.
-- **No money is moved client-side.** This records financial amounts owed for human accounting
-  settlement. `amountPaid`, `paymentReference`, and `paymentDate` are nullable and currently
-  not automated by backend services; the app displays them as "Unpaid" without fabricating data.
+- **No money is moved client-side, on either screen.** This records financial amounts owed (and,
+  once mark-paid is used, amounts paid) for human accounting purposes - no payment is actually
+  processed, no Stripe call is made.
+- **The cross-cafe list has no filter, search, or pagination parameter, and this app adds none.**
+  `GET /admin/payouts` returns every payout from every cafe in one unpaginated call; the screen
+  shows exactly that, honestly labeled as such, rather than fabricating client-side pagination
+  controls over a response the backend already returns in full.
+- **`PayoutResponse` has no cafe name field**, only `cafeId` - the cross-cafe screen links to
+  `/cafes/{cafeId}` rather than inventing a name lookup this app was not given an endpoint for.
+- **The backend prevents calculating a duplicate payout for the same cafe and period** via a
+  service-level existence check and a database unique constraint, both returning `CONFLICT`
+  (409). This app does not duplicate that check client-side; it simply surfaces the resulting
+  409 like any other error, since the backend is the sole source of truth for whether a
+  duplicate exists.
 
 ## Prerequisites
 
