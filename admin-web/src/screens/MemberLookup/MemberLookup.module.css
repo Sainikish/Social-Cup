@@ -8,49 +8,42 @@
   margin: 0 auto;
 }
 
-.header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--spacing-md);
-}
-
 .title {
   font-size: var(--font-size-xl);
   font-weight: 700;
   margin: 0;
 }
 
-.logoutButton {
-  width: auto;
-  padding: 0 var(--spacing-md);
+.notice {
+  background: var(--color-surface-muted);
 }
 
-.card {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-sm);
-}
-
-.signedInAs {
+.noticeText {
   font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
   margin: 0;
 }
 
-.placeholder {
-  font-size: var(--font-size-md);
-  color: var(--color-text-primary);
-  margin: 0;
-}
-
-.navButtons {
+.form {
   display: flex;
-  flex-wrap: wrap;
+  align-items: flex-end;
   gap: var(--spacing-sm);
+  max-width: 480px;
 }
 
-.manageCafesButton {
+.form > :first-child {
+  flex: 1;
+}
+
+.submitButton {
   width: auto;
   padding: 0 var(--spacing-md);
+  height: var(--touch-target-min);
+  white-space: nowrap;
+}
+
+@media (max-width: 768px) {
+  .container {
+    padding: var(--spacing-lg);
+  }
 }

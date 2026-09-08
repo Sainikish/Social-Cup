@@ -2,9 +2,10 @@
 
 The internal admin web app for Social Cup staff: log in with an administrator account and
 manage the platform. **Phase 1** implemented the foundation and authentication. **Phase 2**
-added Cafe Management (create, edit, status change). **Phase 3** adds Drink/Menu Management
-(create, edit, status change, per-cafe display). Member/subscription/redemption/payout/
-audit-log management and dashboard metrics are separate, later phases.
+added Cafe Management (create, edit, status change). **Phase 3** added Drink/Menu Management
+(create, edit, status change, per-cafe display). **Phase 4** adds Member Management (suspend,
+reactivate) - see below for what this deliberately does NOT include, and why. Subscription/
+redemption/payout/audit-log management and dashboard metrics are separate, later phases.
 
 ## Admin authentication
 
@@ -130,6 +131,55 @@ filtering, moving a drink between cafes, and deleting a drink are all out of sco
 phase (the backend supports none of them either, except pagination parameters the underlying
 list endpoint accepts but this app does not expose UI controls for).
 
+## Member Management (Phase 4)
+
+Entry points: a "Manage Members" button on the Dashboard, leading to `/members` (enter a known
+member ID) and `/members/:memberId` (view/suspend/reactivate). Both require an authenticated
+ADMIN session via the same `ProtectedRoute` Phase 1 established.
+
+### Endpoints consumed
+
+| Purpose | Endpoint | Notes |
+| --- | --- | --- |
+| Suspend a member | `POST /admin/members/{memberId}/suspend` | Admin-only, no request body |
+| Reactivate a member | `POST /admin/members/{memberId}/reactivate` | Admin-only, no request body |
+
+Both return the same `MemberDto` returned by `GET /auth/me` - there is no separate admin-only
+member DTO. Neither endpoint accepts a request body on the backend (`AdminMemberController` has
+no `@RequestBody` parameter on either method) - the actor's identity comes entirely from the
+JWT, and this app never sends one.
+
+### Important limitations (by design, not a bug)
+
+**There is no member-list endpoint, no member-search endpoint, and no way to look up an
+arbitrary member by ID at all** - not even a public one. Unlike Cafe/Drink, `MemberDto` is
+returned by exactly two things: `GET /auth/me` (the caller's own record, unusable for looking
+up someone else) and the suspend/reactivate responses (the acted-on member's own record).
+Because of this:
+
+- **`/members` is not a member directory.** It exists only to route a known member ID to
+  `/members/:memberId` - it explicitly states that listing and search both require a backend
+  API that does not exist yet, and are deferred.
+- **`/members/:memberId` cannot show a member's details until an action has been performed on
+  them in the current session.** Arriving at the URL directly (or via a fresh page load) shows
+  an explicit "details are not available, no lookup endpoint exists" notice and a status badge
+  reading "Unknown" - never a fabricated status or profile. Once a suspend/reactivate response
+  is in hand (carried via router state, or freshly returned to this same screen), the real
+  `MemberDto` fields are shown, and only the one valid action (Suspend or Reactivate) is offered
+  going forward. Before that, with status genuinely unknown, both actions are offered - the
+  confirmation dialog says so explicitly, and the backend's own 409 response is the real
+  enforcement point if the wrong one is chosen.
+- **Credit balance and redemption/activity history are both deferred - neither has a backend
+  API this app can safely call for an arbitrary member.** `GET /users/me/credits` is
+  self-only. No redemption-history-by-member endpoint exists at all.
+- The suspend/reactivate confirmation dialog shows the member ID, the requested action, and the
+  last known status (or "Unknown" when none is available) - never assumes success before the
+  backend responds, and a failed request leaves the displayed state completely unchanged.
+
+No fake or mock member data is used anywhere in this app. Member search, member listing,
+pagination/filtering of members, credit-balance display, and redemption-history display are
+all explicitly deferred pending a backend API - see above.
+
 ## Prerequisites
 
 - Node.js 20+ and npm
@@ -187,11 +237,13 @@ src/
 │   │             # CafeStatusDialog components - mirrors mobile/barista-web's own
 │   │             # features/<domain>/ convention (introduced in Phase 2, the first
 │   │             # domain feature; Phase 1 was pure auth/foundation)
-│   └── drinks/   # drink API calls, types, query keys, hooks, form helpers, DrinkForm/
-│                 # DrinkStatusDialog components (Phase 3)
+│   ├── drinks/   # drink API calls, types, query keys, hooks, form helpers, DrinkForm/
+│   │             # DrinkStatusDialog components (Phase 3)
+│   └── members/  # member API calls (suspend/reactivate only - no list/search/detail
+│                 # endpoint exists), types, query keys, hooks, MemberActionDialog (Phase 4)
 ├── routes/       # AppRouter, ProtectedRoute, PublicRoute
 ├── screens/      # Login, Dashboard, CafeList, CafeCreate, CafeDetail,
-│                 # DrinkList, DrinkCreate, DrinkDetail
+│                 # DrinkList, DrinkCreate, DrinkDetail, MemberLookup, MemberDetail
 ├── types/        # shared ApiError/PageResponse shapes
 └── utils/        # errors.ts (safe error-message mapping, AdminAccessRequiredError,
                   # extractFieldErrors)

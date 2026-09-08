@@ -73,4 +73,12 @@ describe('Dashboard', () => {
 
     expect(screen.getByText('Manage Cafes')).toBeInTheDocument();
   });
+
+  it('links to /members via the "Manage Members" button', () => {
+    mockUseAuth.mockReturnValue(authValue());
+
+    renderDashboard();
+
+    expect(screen.getByText('Manage Members')).toBeInTheDocument();
+  });
 });

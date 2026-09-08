@@ -8,6 +8,8 @@ import { DrinkCreate } from '../screens/DrinkCreate/DrinkCreate';
 import { DrinkDetail } from '../screens/DrinkDetail/DrinkDetail';
 import { DrinkList } from '../screens/DrinkList/DrinkList';
 import { Login } from '../screens/Login/Login';
+import { MemberDetail } from '../screens/MemberDetail/MemberDetail';
+import { MemberLookup } from '../screens/MemberLookup/MemberLookup';
 import { ProtectedRoute } from './ProtectedRoute';
 import { PublicRoute } from './PublicRoute';
 
@@ -75,6 +77,22 @@ export function AppRouter() {
         element={
           <ProtectedRoute>
             <DrinkDetail />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/members"
+        element={
+          <ProtectedRoute>
+            <MemberLookup />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/members/:memberId"
+        element={
+          <ProtectedRoute>
+            <MemberDetail />
           </ProtectedRoute>
         }
       />
