@@ -4,16 +4,16 @@ import { useAuth } from '../../auth/AuthContext';
 import { Button, Card } from '../../components';
 import styles from './Dashboard.module.css';
 
-// Placeholder only, per Phase 1 scope - no metrics, no audit-log data of any
-// kind, and no subscription/payout/redemption counts or financial figures
-// either (GET /admin/subscriptions, GET /admin/payouts and GET
-// /admin/redemptions are all read-only and these links are plain nav
-// entries, not dashboard cards backed by their own API call). Drink
-// management is reached via Cafe Detail rather than linked here directly (a
-// drink always belongs to a specific cafe). Per-cafe payout calculation is
-// likewise reached via Cafe Detail; this link is only for the cross-cafe
-// payout list. Member Management (Phase 4) has no list/search to browse
-// from here either - see MemberLookup for why.
+// Placeholder only, per Phase 1 scope - no metrics of any kind, and no
+// subscription/payout/redemption/audit-log counts or financial figures
+// either (GET /admin/subscriptions, GET /admin/payouts, GET
+// /admin/redemptions and GET /admin/audit-log are all read-only and these
+// links are plain nav entries, not dashboard cards backed by their own API
+// call). Drink management is reached via Cafe Detail rather than linked
+// here directly (a drink always belongs to a specific cafe). Per-cafe
+// payout calculation is likewise reached via Cafe Detail; this link is only
+// for the cross-cafe payout list. Member Management (Phase 4) has no
+// list/search to browse from here either - see MemberLookup for why.
 export function Dashboard() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -40,6 +40,11 @@ export function Dashboard() {
           <Button
             label="Manage Redemptions"
             onClick={() => navigate('/redemptions')}
+            className={styles.manageCafesButton}
+          />
+          <Button
+            label="View Audit Log"
+            onClick={() => navigate('/audit-log')}
             className={styles.manageCafesButton}
           />
         </div>

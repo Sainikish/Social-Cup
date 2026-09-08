@@ -105,4 +105,12 @@ describe('Dashboard', () => {
 
     expect(screen.getByText('Manage Redemptions')).toBeInTheDocument();
   });
+
+  it('links to /audit-log via the "View Audit Log" button', () => {
+    mockUseAuth.mockReturnValue(authValue());
+
+    renderDashboard();
+
+    expect(screen.getByText('View Audit Log')).toBeInTheDocument();
+  });
 });

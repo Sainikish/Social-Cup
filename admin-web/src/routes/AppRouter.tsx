@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 
+import { AuditLogList } from '../screens/AuditLogList/AuditLogList';
 import { CafeCreate } from '../screens/CafeCreate/CafeCreate';
 import { CafeDetail } from '../screens/CafeDetail/CafeDetail';
 import { CafeList } from '../screens/CafeList/CafeList';
@@ -129,6 +130,14 @@ export function AppRouter() {
         element={
           <ProtectedRoute>
             <RedemptionList />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/audit-log"
+        element={
+          <ProtectedRoute>
+            <AuditLogList />
           </ProtectedRoute>
         }
       />

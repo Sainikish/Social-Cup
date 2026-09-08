@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 
 import { useAuth } from '../../src/auth/AuthContext';
 import type { AdminUser, AuthContextValue } from '../../src/auth/types';
+import { getAuditLog } from '../../src/features/auditLog/api';
 import { getDrinksByCafe } from '../../src/features/drinks/api';
 import { getAllPayouts, getPayoutsForCafe } from '../../src/features/payouts/api';
 import { getRedemptions } from '../../src/features/redemptions/api';
@@ -16,12 +17,14 @@ vi.mock('../../src/auth/AuthContext', async () => {
 vi.mock('../../src/features/drinks/api');
 vi.mock('../../src/features/payouts/api');
 vi.mock('../../src/features/redemptions/api');
+vi.mock('../../src/features/auditLog/api');
 
 const mockUseAuth = vi.mocked(useAuth);
 const mockGetDrinksByCafe = vi.mocked(getDrinksByCafe);
 const mockGetPayoutsForCafe = vi.mocked(getPayoutsForCafe);
 const mockGetAllPayouts = vi.mocked(getAllPayouts);
 const mockGetRedemptions = vi.mocked(getRedemptions);
+const mockGetAuditLog = vi.mocked(getAuditLog);
 
 function adminUser(overrides: Partial<AdminUser> = {}): AdminUser {
   return {
@@ -301,5 +304,35 @@ describe('route protection', () => {
 
     expect(screen.getByLabelText('Email')).toBeInTheDocument();
     expect(mockGetRedemptions).not.toHaveBeenCalled();
+  });
+
+  it('lets an ADMIN reach /audit-log', async () => {
+    mockGetAuditLog.mockResolvedValue({
+      content: [], page: 0, size: 20, totalElements: 0, totalPages: 0, first: true, last: true, empty: true,
+    });
+    mockUseAuth.mockReturnValue(authValue({ isAuthenticated: true, user: adminUser() }));
+
+    renderAt('/audit-log');
+
+    expect(await screen.findByText('No audit log entries found.')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Email')).not.toBeInTheDocument();
+  });
+
+  it('denies a MEMBER access to /audit-log, redirecting to /login', () => {
+    mockUseAuth.mockReturnValue(authValue({ isAuthenticated: true, user: adminUser({ roles: ['MEMBER'] }) }));
+
+    renderAt('/audit-log');
+
+    expect(screen.getByLabelText('Email')).toBeInTheDocument();
+    expect(mockGetAuditLog).not.toHaveBeenCalled();
+  });
+
+  it('redirects an anonymous user away from /audit-log to /login', () => {
+    mockUseAuth.mockReturnValue(authValue({ isAuthenticated: false, user: null }));
+
+    renderAt('/audit-log');
+
+    expect(screen.getByLabelText('Email')).toBeInTheDocument();
+    expect(mockGetAuditLog).not.toHaveBeenCalled();
   });
 });
