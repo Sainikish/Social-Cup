@@ -5,6 +5,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { useAuth } from '../../src/auth/AuthContext';
 import type { AdminUser, AuthContextValue } from '../../src/auth/types';
 import { getAuditLog } from '../../src/features/auditLog/api';
+import { getDashboardMetrics } from '../../src/features/dashboardMetrics/api';
 import { getDrinksByCafe } from '../../src/features/drinks/api';
 import { getAllPayouts, getPayoutsForCafe } from '../../src/features/payouts/api';
 import { getRedemptions } from '../../src/features/redemptions/api';
@@ -18,6 +19,7 @@ vi.mock('../../src/features/drinks/api');
 vi.mock('../../src/features/payouts/api');
 vi.mock('../../src/features/redemptions/api');
 vi.mock('../../src/features/auditLog/api');
+vi.mock('../../src/features/dashboardMetrics/api');
 
 const mockUseAuth = vi.mocked(useAuth);
 const mockGetDrinksByCafe = vi.mocked(getDrinksByCafe);
@@ -25,6 +27,7 @@ const mockGetPayoutsForCafe = vi.mocked(getPayoutsForCafe);
 const mockGetAllPayouts = vi.mocked(getAllPayouts);
 const mockGetRedemptions = vi.mocked(getRedemptions);
 const mockGetAuditLog = vi.mocked(getAuditLog);
+const mockGetDashboardMetrics = vi.mocked(getDashboardMetrics);
 
 function adminUser(overrides: Partial<AdminUser> = {}): AdminUser {
   return {
@@ -65,6 +68,10 @@ function renderAt(path: string) {
 
 describe('route protection', () => {
   it('lets an ADMIN reach /dashboard', () => {
+    mockGetDashboardMetrics.mockResolvedValue({
+      totalMembers: 0, totalActiveCafes: 0, totalActiveDrinks: 0, totalRedemptions: 0,
+      totalCreditsRedeemed: 0, totalPayoutAmountOwed: 0, totalPayoutAmountPaid: 0,
+    });
     mockUseAuth.mockReturnValue(authValue({ isAuthenticated: true, user: adminUser() }));
 
     renderAt('/dashboard');
@@ -107,6 +114,10 @@ describe('route protection', () => {
   });
 
   it('redirects an already-authenticated admin away from /login to /dashboard', () => {
+    mockGetDashboardMetrics.mockResolvedValue({
+      totalMembers: 0, totalActiveCafes: 0, totalActiveDrinks: 0, totalRedemptions: 0,
+      totalCreditsRedeemed: 0, totalPayoutAmountOwed: 0, totalPayoutAmountPaid: 0,
+    });
     mockUseAuth.mockReturnValue(authValue({ isAuthenticated: true, user: adminUser() }));
 
     renderAt('/login');

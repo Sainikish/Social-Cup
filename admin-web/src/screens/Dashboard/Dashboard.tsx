@@ -1,22 +1,25 @@
 import { useNavigate } from 'react-router-dom';
 
+import { toApiError } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
-import { Button, Card } from '../../components';
+import { Button, Card, ErrorState, LoadingState } from '../../components';
+import { dashboardMetricsErrorMessage, useDashboardMetricsQuery } from '../../features/dashboardMetrics';
 import styles from './Dashboard.module.css';
 
-// Placeholder only, per Phase 1 scope - no metrics of any kind, and no
-// subscription/payout/redemption/audit-log counts or financial figures
-// either (GET /admin/subscriptions, GET /admin/payouts, GET
-// /admin/redemptions and GET /admin/audit-log are all read-only and these
-// links are plain nav entries, not dashboard cards backed by their own API
-// call). Drink management is reached via Cafe Detail rather than linked
-// here directly (a drink always belongs to a specific cafe). Per-cafe
-// payout calculation is likewise reached via Cafe Detail; this link is only
-// for the cross-cafe payout list. Member Management (Phase 4) has no
-// list/search to browse from here either - see MemberLookup for why.
+// Otherwise a placeholder, per Phase 1 scope - the nav links below add no
+// card, count, or metric of their own beyond the one Dashboard Metrics
+// section (GET /admin/dashboard/metrics); they remain plain navigation
+// entries to their own full screens (GET /admin/subscriptions, GET
+// /admin/payouts, GET /admin/redemptions and GET /admin/audit-log). Drink
+// management is reached via Cafe Detail rather than linked here directly (a
+// drink always belongs to a specific cafe). Per-cafe payout calculation is
+// likewise reached via Cafe Detail; this link is only for the cross-cafe
+// payout list. Member Management (Phase 4) has no list/search to browse
+// from here either - see MemberLookup for why.
 export function Dashboard() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const metricsQuery = useDashboardMetricsQuery();
 
   return (
     <div className={styles.container}>
@@ -48,6 +51,52 @@ export function Dashboard() {
             className={styles.manageCafesButton}
           />
         </div>
+      </Card>
+
+      <Card className={styles.metricsCard}>
+        <h2 className={styles.sectionTitle}>Dashboard Metrics</h2>
+
+        {metricsQuery.isLoading ? <LoadingState label="Loading metrics…" /> : null}
+
+        {metricsQuery.isError ? (
+          <ErrorState
+            message={dashboardMetricsErrorMessage(toApiError(metricsQuery.error).code)}
+            onRetry={() => metricsQuery.refetch()}
+          />
+        ) : null}
+
+        {metricsQuery.isSuccess ? (
+          <dl className={styles.metricsGrid}>
+            <div className={styles.metricItem}>
+              <dt className={styles.metricLabel}>Total Members</dt>
+              <dd className={styles.metricValue}>{metricsQuery.data.totalMembers}</dd>
+            </div>
+            <div className={styles.metricItem}>
+              <dt className={styles.metricLabel}>Total Active Cafes</dt>
+              <dd className={styles.metricValue}>{metricsQuery.data.totalActiveCafes}</dd>
+            </div>
+            <div className={styles.metricItem}>
+              <dt className={styles.metricLabel}>Total Active Drinks</dt>
+              <dd className={styles.metricValue}>{metricsQuery.data.totalActiveDrinks}</dd>
+            </div>
+            <div className={styles.metricItem}>
+              <dt className={styles.metricLabel}>Total Redemptions</dt>
+              <dd className={styles.metricValue}>{metricsQuery.data.totalRedemptions}</dd>
+            </div>
+            <div className={styles.metricItem}>
+              <dt className={styles.metricLabel}>Total Credits Redeemed</dt>
+              <dd className={styles.metricValue}>{metricsQuery.data.totalCreditsRedeemed}</dd>
+            </div>
+            <div className={styles.metricItem}>
+              <dt className={styles.metricLabel}>Total Payout Amount Owed</dt>
+              <dd className={styles.metricValue}>${metricsQuery.data.totalPayoutAmountOwed.toFixed(2)}</dd>
+            </div>
+            <div className={styles.metricItem}>
+              <dt className={styles.metricLabel}>Total Payout Amount Paid</dt>
+              <dd className={styles.metricValue}>${metricsQuery.data.totalPayoutAmountPaid.toFixed(2)}</dd>
+            </div>
+          </dl>
+        ) : null}
       </Card>
     </div>
   );
