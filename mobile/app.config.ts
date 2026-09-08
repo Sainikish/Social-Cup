@@ -34,7 +34,16 @@ const config: ExpoConfig = {
     favicon: './assets/favicon.png',
   },
 
-  plugins: ['expo-router', 'expo-secure-store'],
+  plugins: [
+    'expo-router',
+    'expo-secure-store',
+    // This phase only uses plain card entry (CardField + createPaymentMethod) -
+    // no Apple Pay / Google Pay. The installed plugin version still requires
+    // merchantIdentifier/enableGooglePay to be defined (crashes on `undefined`
+    // otherwise), so they're explicitly set to their "disabled" values rather
+    // than configuring real wallet-payment support.
+    ['@stripe/stripe-react-native', { merchantIdentifier: [], enableGooglePay: false }],
+  ],
 
   experiments: {
     typedRoutes: true,

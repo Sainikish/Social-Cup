@@ -227,6 +227,47 @@ describe('DrinkDetailScreen', () => {
     expect(mockPush).toHaveBeenCalledWith('/(app)/cafes/cafe-1');
   });
 
+  describe('Redemption CTA (Phase F)', () => {
+    it('renders a "Redeem this drink" CTA for an authenticated member and an available drink', async () => {
+      mockGetDrinkById.mockResolvedValue(fullDrink());
+      authAs(AUTHENTICATED_USER);
+
+      renderScreen();
+
+      expect(await screen.findByLabelText('Redeem this drink')).toBeTruthy();
+    });
+
+    it('navigates to the redemption screen with the correct drink id when pressed', async () => {
+      mockGetDrinkById.mockResolvedValue(fullDrink());
+      authAs(AUTHENTICATED_USER);
+
+      renderScreen();
+      fireEvent.press(await screen.findByLabelText('Redeem this drink'));
+
+      expect(mockPush).toHaveBeenCalledWith('/(app)/drinks/redeem?drinkId=drink-1');
+    });
+
+    it('omits the CTA for an unauthenticated member', async () => {
+      mockGetDrinkById.mockResolvedValue(fullDrink());
+      authAs(null);
+
+      renderScreen();
+      await screen.findByText('Cortado');
+
+      expect(screen.queryByLabelText('Redeem this drink')).toBeNull();
+    });
+
+    it('omits the CTA for a currently-unavailable drink', async () => {
+      mockGetDrinkById.mockResolvedValue({ ...minimalDrink(), status: 'INACTIVE' });
+      authAs(AUTHENTICATED_USER);
+
+      renderScreen();
+      await screen.findByText('Currently unavailable');
+
+      expect(screen.queryByLabelText('Redeem this drink')).toBeNull();
+    });
+  });
+
   describe('Ratings section (Phase 7.5)', () => {
     it('shows the public rating list, loading, then loaded', async () => {
       mockGetDrinkById.mockResolvedValue(fullDrink());

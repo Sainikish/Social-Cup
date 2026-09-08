@@ -5,18 +5,28 @@ import { renderRouter, screen, waitFor } from 'expo-router/testing-library';
 
 import * as authApi from '../../src/api/auth';
 import * as cafesApi from '../../src/features/cafes/api';
+import * as creditsApi from '../../src/features/credits/api';
+import * as subscriptionApi from '../../src/features/subscription/api';
 import { getAccessToken, getRefreshToken } from '../../src/storage/authStorage';
 import type { MemberDto } from '../../src/types/auth';
 
 jest.mock('../../src/api/auth');
 jest.mock('../../src/storage/authStorage');
 jest.mock('../../src/features/cafes/api');
+jest.mock('../../src/features/credits/api');
+jest.mock('../../src/features/subscription/api');
 
 const mockGetAccessToken = getAccessToken as jest.MockedFunction<typeof getAccessToken>;
 const mockGetRefreshToken = getRefreshToken as jest.MockedFunction<typeof getRefreshToken>;
 const mockGetCurrentUser = authApi.getCurrentUser as jest.MockedFunction<typeof authApi.getCurrentUser>;
 const mockGetFeaturedCafes = cafesApi.getFeaturedCafes as jest.MockedFunction<
   typeof cafesApi.getFeaturedCafes
+>;
+const mockGetMyCreditBalance = creditsApi.getMyCreditBalance as jest.MockedFunction<
+  typeof creditsApi.getMyCreditBalance
+>;
+const mockGetMySubscription = subscriptionApi.getMySubscription as jest.MockedFunction<
+  typeof subscriptionApi.getMySubscription
 >;
 
 const SAMPLE_USER: MemberDto = {
@@ -45,6 +55,15 @@ beforeEach(() => {
     first: true,
     last: true,
     empty: true,
+  });
+  // The Profile screen (Phase F) now fetches the member's credit balance and
+  // subscription status - not the concern of these route-protection tests,
+  // so both are stubbed to a resolved, unsubscribed default.
+  mockGetMyCreditBalance.mockResolvedValue({ balance: 0 });
+  mockGetMySubscription.mockRejectedValue({
+    isAxiosError: true,
+    response: { status: 404, data: { code: 'RESOURCE_NOT_FOUND', message: 'No subscription found' } },
+    toJSON: () => ({}),
   });
 });
 

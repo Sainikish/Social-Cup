@@ -49,7 +49,16 @@ function resolveApiBaseUrl(environment: AppEnvironment): string {
 const environment = resolveEnvironment();
 const apiBaseUrl = resolveApiBaseUrl(environment);
 
+// Publishable key only - safe for client-side use (Stripe's own convention,
+// mirrored by every official Stripe SDK). Deliberately does NOT throw when
+// unset, unlike apiBaseUrl above: unlike the API base URL, nothing at app
+// startup needs this - only the subscribe screen does, and it surfaces a
+// clear error state there rather than crashing the whole app for members who
+// never open that screen.
+const stripePublishableKey = process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? '';
+
 export const config = {
   environment,
   apiBaseUrl,
+  stripePublishableKey,
 } as const;

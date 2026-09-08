@@ -18,6 +18,7 @@ export default function ProfileLayout() {
     >
       <Stack.Screen name="index" options={{ title: 'Profile' }} />
       <Stack.Screen name="diary" options={{ title: 'My Drink Diary' }} />
+      <Stack.Screen name="subscription" options={{ title: 'Membership' }} />
     </Stack>
   );
 }

@@ -90,6 +90,14 @@ export default function DrinkDetailScreen() {
           </Pressable>
 
           <DrinkPrice retailPrice={drink.retailPrice} creditPrice={drink.creditPrice} />
+
+          {user && !isUnavailable ? (
+            <Button
+              label="Redeem this drink"
+              accessibilityLabel="Redeem this drink"
+              onPress={() => router.push(`/(app)/drinks/redeem?drinkId=${drink.id}`)}
+            />
+          ) : null}
         </View>
 
         {drink.description ? (

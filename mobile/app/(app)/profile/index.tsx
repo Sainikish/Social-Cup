@@ -1,8 +1,11 @@
 import { useRouter } from 'expo-router';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { toApiError } from '../../../src/api/client';
 import { Avatar, Button, Card } from '../../../src/components';
 import { useAuth } from '../../../src/features/auth';
+import { useCreditBalanceQuery } from '../../../src/features/credits';
+import { SubscriptionStatusCard, useSubscriptionQuery } from '../../../src/features/subscription';
 import { colors, fontSize, fontWeight, spacing } from '../../../src/theme';
 
 // Mirrors com.socialcup.user.entity.MemberStatus - ACTIVE is the normal,
@@ -22,6 +25,16 @@ export default function ProfileScreen() {
   const identityLabel = fullName || user?.email || '';
   const showStatus = Boolean(user?.status) && user?.status !== 'ACTIVE';
 
+  const creditQuery = useCreditBalanceQuery({ enabled: Boolean(user) });
+  const subscriptionQuery = useSubscriptionQuery({ enabled: Boolean(user) });
+  // undefined = still loading (or a non-404 error) - the membership card
+  // simply omits the status summary in that case rather than showing a full
+  // error state; the dedicated Subscription screen owns that. null means
+  // "confirmed not subscribed" (the GET 404 case), a real, displayable state.
+  const subscriptionApiError = subscriptionQuery.error ? toApiError(subscriptionQuery.error) : undefined;
+  const subscriptionForDisplay =
+    subscriptionApiError?.code === 'RESOURCE_NOT_FOUND' ? null : subscriptionQuery.data;
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.header}>
@@ -37,6 +50,26 @@ export default function ProfileScreen() {
           </Text>
         ) : null}
       </View>
+
+      <Card style={styles.membershipCard}>
+        <View style={styles.infoRow}>
+          <Text style={styles.infoLabel}>Credit balance</Text>
+          <Text style={styles.infoValue}>
+            {creditQuery.data ? `${creditQuery.data.balance} credits` : '—'}
+          </Text>
+        </View>
+
+        {subscriptionForDisplay !== undefined ? (
+          <SubscriptionStatusCard subscription={subscriptionForDisplay} />
+        ) : null}
+
+        <Button
+          label="Manage Membership"
+          variant="outline"
+          accessibilityLabel="Manage membership"
+          onPress={() => router.push('/(app)/profile/subscription')}
+        />
+      </Card>
 
       <Card style={styles.infoCard}>
         {showStatus && user ? (
@@ -86,6 +119,9 @@ const styles = StyleSheet.create({
   email: {
     fontSize: fontSize.sm,
     color: colors.textSecondary,
+  },
+  membershipCard: {
+    gap: spacing.md,
   },
   infoCard: {
     gap: spacing.sm,

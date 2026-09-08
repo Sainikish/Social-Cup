@@ -18,6 +18,7 @@ export default function DrinksLayout() {
     >
       <Stack.Screen name="index" options={{ title: 'Drinks' }} />
       <Stack.Screen name="[id]" options={{ title: '' }} />
+      <Stack.Screen name="redeem" options={{ title: 'Redeem' }} />
     </Stack>
   );
 }
