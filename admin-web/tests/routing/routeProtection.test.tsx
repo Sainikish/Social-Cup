@@ -6,6 +6,7 @@ import { useAuth } from '../../src/auth/AuthContext';
 import type { AdminUser, AuthContextValue } from '../../src/auth/types';
 import { getDrinksByCafe } from '../../src/features/drinks/api';
 import { getAllPayouts, getPayoutsForCafe } from '../../src/features/payouts/api';
+import { getRedemptions } from '../../src/features/redemptions/api';
 import { AppRouter } from '../../src/routes/AppRouter';
 
 vi.mock('../../src/auth/AuthContext', async () => {
@@ -14,11 +15,13 @@ vi.mock('../../src/auth/AuthContext', async () => {
 });
 vi.mock('../../src/features/drinks/api');
 vi.mock('../../src/features/payouts/api');
+vi.mock('../../src/features/redemptions/api');
 
 const mockUseAuth = vi.mocked(useAuth);
 const mockGetDrinksByCafe = vi.mocked(getDrinksByCafe);
 const mockGetPayoutsForCafe = vi.mocked(getPayoutsForCafe);
 const mockGetAllPayouts = vi.mocked(getAllPayouts);
+const mockGetRedemptions = vi.mocked(getRedemptions);
 
 function adminUser(overrides: Partial<AdminUser> = {}): AdminUser {
   return {
@@ -268,5 +271,35 @@ describe('route protection', () => {
 
     expect(screen.getByLabelText('Email')).toBeInTheDocument();
     expect(mockGetAllPayouts).not.toHaveBeenCalled();
+  });
+
+  it('lets an ADMIN reach /redemptions', async () => {
+    mockGetRedemptions.mockResolvedValue({
+      content: [], page: 0, size: 20, totalElements: 0, totalPages: 0, first: true, last: true, empty: true,
+    });
+    mockUseAuth.mockReturnValue(authValue({ isAuthenticated: true, user: adminUser() }));
+
+    renderAt('/redemptions');
+
+    expect(await screen.findByText('No redemptions found.')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Email')).not.toBeInTheDocument();
+  });
+
+  it('denies a MEMBER access to /redemptions, redirecting to /login', () => {
+    mockUseAuth.mockReturnValue(authValue({ isAuthenticated: true, user: adminUser({ roles: ['MEMBER'] }) }));
+
+    renderAt('/redemptions');
+
+    expect(screen.getByLabelText('Email')).toBeInTheDocument();
+    expect(mockGetRedemptions).not.toHaveBeenCalled();
+  });
+
+  it('redirects an anonymous user away from /redemptions to /login', () => {
+    mockUseAuth.mockReturnValue(authValue({ isAuthenticated: false, user: null }));
+
+    renderAt('/redemptions');
+
+    expect(screen.getByLabelText('Email')).toBeInTheDocument();
+    expect(mockGetRedemptions).not.toHaveBeenCalled();
   });
 });

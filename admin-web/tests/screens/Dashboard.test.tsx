@@ -97,4 +97,12 @@ describe('Dashboard', () => {
 
     expect(screen.getByText('Manage Payouts')).toBeInTheDocument();
   });
+
+  it('links to /redemptions via the "Manage Redemptions" button', () => {
+    mockUseAuth.mockReturnValue(authValue());
+
+    renderDashboard();
+
+    expect(screen.getByText('Manage Redemptions')).toBeInTheDocument();
+  });
 });

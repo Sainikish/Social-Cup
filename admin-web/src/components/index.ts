@@ -12,3 +12,6 @@ export type { InputProps } from './Input';
 
 export { LoadingState } from './LoadingState';
 export type { LoadingStateProps } from './LoadingState';
+
+export { Pagination } from './Pagination';
+export type { PaginationProps } from './Pagination';

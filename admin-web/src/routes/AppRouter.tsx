@@ -12,6 +12,7 @@ import { MemberDetail } from '../screens/MemberDetail/MemberDetail';
 import { MemberLookup } from '../screens/MemberLookup/MemberLookup';
 import { CafePayouts } from '../screens/CafePayouts/CafePayouts';
 import { PayoutList } from '../screens/PayoutList/PayoutList';
+import { RedemptionList } from '../screens/RedemptionList/RedemptionList';
 import { SubscriptionList } from '../screens/SubscriptionList/SubscriptionList';
 import { ProtectedRoute } from './ProtectedRoute';
 import { PublicRoute } from './PublicRoute';
@@ -120,6 +121,14 @@ export function AppRouter() {
         element={
           <ProtectedRoute>
             <PayoutList />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/redemptions"
+        element={
+          <ProtectedRoute>
+            <RedemptionList />
           </ProtectedRoute>
         }
       />
