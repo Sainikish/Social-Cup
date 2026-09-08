@@ -62,6 +62,7 @@ const PUBLIC_DETAIL: CafeDetailResponse = {
   description: null,
   status: 'ACTIVE',
   photos: [],
+  drinks: [],
   createdAt: '2026-01-01T00:00:00Z',
   updatedAt: '2026-01-01T00:00:00Z',
 };
@@ -272,5 +273,58 @@ describe('CafeDetail - route protection for /cafes/:id', () => {
 
     expect(screen.getByLabelText('Email')).toBeInTheDocument();
     expect(mockGetPublicCafeById).not.toHaveBeenCalled();
+  });
+});
+
+describe('CafeDetail - Phase 3 drinks integration', () => {
+  it('shows an empty-drinks message and clearly states the active-drinks-only limitation when the cafe has none', async () => {
+    mockGetPublicCafeById.mockResolvedValue(PUBLIC_DETAIL);
+    renderCold();
+
+    await screen.findByText('Daily Grind', { selector: 'h1' });
+
+    expect(screen.getByText('No active drinks at this cafe yet.')).toBeInTheDocument();
+    expect(screen.getByText('active drinks only', { exact: false })).toBeInTheDocument();
+  });
+
+  it('lists the cafe detail response\'s embedded active drinks, without a separate fetch', async () => {
+    mockGetPublicCafeById.mockResolvedValue({
+      ...PUBLIC_DETAIL,
+      drinks: [
+        {
+          id: 'drink-1',
+          cafeId: 'cafe-1',
+          cafeName: 'Daily Grind',
+          name: 'Iced Latte',
+          type: 'Coffee',
+          description: null,
+          retailPrice: 4.5,
+          creditPrice: 2,
+          photoUrl: null,
+          signature: false,
+          status: 'ACTIVE',
+          createdAt: '2026-01-01T00:00:00Z',
+          updatedAt: '2026-01-01T00:00:00Z',
+        },
+      ],
+    });
+    renderCold();
+
+    await screen.findByText('Daily Grind', { selector: 'h1' });
+
+    expect(screen.getByText('Iced Latte', { exact: false })).toBeInTheDocument();
+  });
+
+  it('still renders cafe create/edit/status/search entry points unaffected by the new Drinks section', async () => {
+    mockGetPublicCafeById.mockResolvedValue(PUBLIC_DETAIL);
+    renderCold();
+
+    await screen.findByText('Daily Grind', { selector: 'h1' });
+
+    expect(screen.getByText('Manage Drinks')).toBeInTheDocument();
+    expect(screen.getByText('Add Drink')).toBeInTheDocument();
+    expect(screen.getByText('Save Changes')).toBeInTheDocument();
+    expect(screen.getByText('Set INACTIVE')).toBeInTheDocument();
+    expect(screen.getByText('Set ARCHIVED')).toBeInTheDocument();
   });
 });

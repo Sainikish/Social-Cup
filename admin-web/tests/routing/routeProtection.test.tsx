@@ -4,14 +4,17 @@ import { MemoryRouter } from 'react-router-dom';
 
 import { useAuth } from '../../src/auth/AuthContext';
 import type { AdminUser, AuthContextValue } from '../../src/auth/types';
+import { getDrinksByCafe } from '../../src/features/drinks/api';
 import { AppRouter } from '../../src/routes/AppRouter';
 
 vi.mock('../../src/auth/AuthContext', async () => {
   const actual = await vi.importActual('../../src/auth/AuthContext');
   return { ...actual, useAuth: vi.fn() };
 });
+vi.mock('../../src/features/drinks/api');
 
 const mockUseAuth = vi.mocked(useAuth);
+const mockGetDrinksByCafe = vi.mocked(getDrinksByCafe);
 
 function adminUser(overrides: Partial<AdminUser> = {}): AdminUser {
   return {
@@ -148,6 +151,61 @@ describe('route protection', () => {
     mockUseAuth.mockReturnValue(authValue({ isAuthenticated: false, user: null }));
 
     renderAt('/cafes/new');
+
+    expect(screen.getByLabelText('Email')).toBeInTheDocument();
+  });
+
+  it('lets an ADMIN reach /cafes/:cafeId/drinks', async () => {
+    mockGetDrinksByCafe.mockResolvedValue({
+      content: [], page: 0, size: 50, totalElements: 0, totalPages: 0, first: true, last: true, empty: true,
+    });
+    mockUseAuth.mockReturnValue(authValue({ isAuthenticated: true, user: adminUser() }));
+
+    renderAt('/cafes/cafe-1/drinks');
+
+    expect(await screen.findByText('Add Drink')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Email')).not.toBeInTheDocument();
+  });
+
+  it('denies a MEMBER access to /cafes/:cafeId/drinks, redirecting to /login', () => {
+    mockUseAuth.mockReturnValue(authValue({ isAuthenticated: true, user: adminUser({ roles: ['MEMBER'] }) }));
+
+    renderAt('/cafes/cafe-1/drinks');
+
+    expect(screen.getByLabelText('Email')).toBeInTheDocument();
+    expect(mockGetDrinksByCafe).not.toHaveBeenCalled();
+  });
+
+  it('redirects an anonymous user away from /cafes/:cafeId/drinks to /login', () => {
+    mockUseAuth.mockReturnValue(authValue({ isAuthenticated: false, user: null }));
+
+    renderAt('/cafes/cafe-1/drinks');
+
+    expect(screen.getByLabelText('Email')).toBeInTheDocument();
+    expect(mockGetDrinksByCafe).not.toHaveBeenCalled();
+  });
+
+  it('lets an ADMIN reach /cafes/:cafeId/drinks/new', () => {
+    mockUseAuth.mockReturnValue(authValue({ isAuthenticated: true, user: adminUser() }));
+
+    renderAt('/cafes/cafe-1/drinks/new');
+
+    expect(screen.getByText('Add Drink', { selector: 'h1' })).toBeInTheDocument();
+  });
+
+  it('denies a MEMBER access to /cafes/:cafeId/drinks/new, redirecting to /login', () => {
+    mockUseAuth.mockReturnValue(authValue({ isAuthenticated: true, user: adminUser({ roles: ['MEMBER'] }) }));
+
+    renderAt('/cafes/cafe-1/drinks/new');
+
+    expect(screen.getByLabelText('Email')).toBeInTheDocument();
+    expect(screen.queryByText('Add Drink', { selector: 'h1' })).not.toBeInTheDocument();
+  });
+
+  it('redirects an anonymous user away from /cafes/:cafeId/drinks/new to /login', () => {
+    mockUseAuth.mockReturnValue(authValue({ isAuthenticated: false, user: null }));
+
+    renderAt('/cafes/cafe-1/drinks/new');
 
     expect(screen.getByLabelText('Email')).toBeInTheDocument();
   });

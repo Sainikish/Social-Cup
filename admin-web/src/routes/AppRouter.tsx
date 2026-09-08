@@ -4,6 +4,9 @@ import { CafeCreate } from '../screens/CafeCreate/CafeCreate';
 import { CafeDetail } from '../screens/CafeDetail/CafeDetail';
 import { CafeList } from '../screens/CafeList/CafeList';
 import { Dashboard } from '../screens/Dashboard/Dashboard';
+import { DrinkCreate } from '../screens/DrinkCreate/DrinkCreate';
+import { DrinkDetail } from '../screens/DrinkDetail/DrinkDetail';
+import { DrinkList } from '../screens/DrinkList/DrinkList';
 import { Login } from '../screens/Login/Login';
 import { ProtectedRoute } from './ProtectedRoute';
 import { PublicRoute } from './PublicRoute';
@@ -48,6 +51,30 @@ export function AppRouter() {
         element={
           <ProtectedRoute>
             <CafeDetail />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/cafes/:cafeId/drinks"
+        element={
+          <ProtectedRoute>
+            <DrinkList />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/cafes/:cafeId/drinks/new"
+        element={
+          <ProtectedRoute>
+            <DrinkCreate />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/drinks/:drinkId"
+        element={
+          <ProtectedRoute>
+            <DrinkDetail />
           </ProtectedRoute>
         }
       />

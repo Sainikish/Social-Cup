@@ -2,8 +2,9 @@
 
 The internal admin web app for Social Cup staff: log in with an administrator account and
 manage the platform. **Phase 1** implemented the foundation and authentication. **Phase 2**
-adds Cafe Management (create, edit, status change). Drink/member/subscription/redemption/
-payout/audit-log management are separate, later phases.
+added Cafe Management (create, edit, status change). **Phase 3** adds Drink/Menu Management
+(create, edit, status change, per-cafe display). Member/subscription/redemption/payout/
+audit-log management and dashboard metrics are separate, later phases.
 
 ## Admin authentication
 
@@ -73,6 +74,62 @@ all. Because of this:
 
 No fake or mock cafe data is used anywhere in this app.
 
+## Drink Management (Phase 3)
+
+Entry points: a "Drinks" section on Cafe Detail (showing the cafe's active drinks embedded
+in its own detail response, plus "Add Drink" / "Manage Drinks" links) and three routes:
+`/cafes/:cafeId/drinks` (browse), `/cafes/:cafeId/drinks/new` (create), `/drinks/:drinkId`
+(view/edit + status change). All require an authenticated ADMIN session via the same
+`ProtectedRoute` Phase 1 established.
+
+### Endpoints consumed
+
+| Purpose | Endpoint | Notes |
+| --- | --- | --- |
+| List a cafe's drinks | `GET /cafes/{id}/drinks` (public) | Same endpoint mobile/barista-web use |
+| Load a drink by ID | `GET /drinks/{id}` (public) | Finds ACTIVE/INACTIVE only - see below |
+| Create a drink | `POST /admin/cafes/{cafeId}/drinks` | Admin-only, `CreateDrinkRequest` |
+| Update a drink | `PUT /admin/drinks/{id}` | Admin-only, `UpdateDrinkRequest` |
+| Change a drink's status | `PATCH /admin/drinks/{id}/status` | Admin-only, `{status}` |
+
+Unlike Cafe, the backend returns the exact same `DrinkResponse` shape from every one of these
+endpoints - there is no admin-only drink DTO and no field (such as Cafe's `payoutRate`) that
+one response has and another lacks. There is also no `DrinkType` enum in the backend - `type`
+is a plain free-text field, so this app does not present it as a fixed dropdown.
+
+### Important limitations (by design, not a bug)
+
+**There is no admin drink-list endpoint, and no admin get-drink-by-id endpoint.**
+`AdminDrinkController` only exposes update and status-change; creation lives on
+`AdminCafeController` instead. Because of this:
+
+- **The Drinks screens are browse-only, not "All Drinks."** `GET /cafes/{id}/drinks`
+  (`DrinkService.getDrinksByCafe`) hardcodes `includeInactive=false` - **inactive and archived
+  drinks never appear there.** The same limitation applies to the drinks embedded directly in
+  `CafeDetailResponse`/`AdminCafeDetailResponse` (`CafeService` calls
+  `drinkService.getActiveDrinksForCafe`, ACTIVE only). This app labels both surfaces
+  "active drinks only" and never implies a complete list.
+- **Archiving a drink is effectively permanent through this app.** Every drink lookup and
+  write path on the backend (`getDrinkById`, `updateDrink`, `updateDrinkStatus`) requires
+  `findByIdAndArchivedAtIsNull` - once a drink is archived, the public detail endpoint 404s
+  for it and the admin update/status endpoints would too. There is no way for this app to
+  view, edit, or reactivate a drink after archiving it. The status-change confirmation dialog
+  states this explicitly before an admin confirms an ARCHIVED request.
+- A brand-new cafe (no drinks yet) and a cold arrival at a drink's detail screen are both
+  handled without fabricating data: an empty drinks list renders as "No active drinks at this
+  cafe yet," never a fake placeholder drink.
+- No financial value is computed client-side - `retailPrice` and `creditPrice` are independent,
+  directly-entered fields with no derived relationship between them, validated only against the
+  same ranges (`retailPrice >= 0.01`, `creditPrice >= 1` whole number) the backend itself
+  enforces.
+- A drink's status change is only ever shown as successful once the backend's response confirms
+  it, exactly like Cafe status changes.
+
+No fake or mock drink data is used anywhere in this app. Drink search, pagination controls,
+filtering, moving a drink between cafes, and deleting a drink are all out of scope for this
+phase (the backend supports none of them either, except pagination parameters the underlying
+list endpoint accepts but this app does not expose UI controls for).
+
 ## Prerequisites
 
 - Node.js 20+ and npm
@@ -126,12 +183,15 @@ src/
 ├── components/   # shared UI primitives (Button, Input, Card, LoadingState, ErrorState)
 ├── config/       # env.ts
 ├── features/
-│   └── cafes/    # cafe API calls, types, query keys, hooks, form helpers, CafeForm/
-│                 # CafeStatusDialog components - mirrors mobile/barista-web's own
-│                 # features/<domain>/ convention (introduced in Phase 2, the first
-│                 # domain feature; Phase 1 was pure auth/foundation)
+│   ├── cafes/    # cafe API calls, types, query keys, hooks, form helpers, CafeForm/
+│   │             # CafeStatusDialog components - mirrors mobile/barista-web's own
+│   │             # features/<domain>/ convention (introduced in Phase 2, the first
+│   │             # domain feature; Phase 1 was pure auth/foundation)
+│   └── drinks/   # drink API calls, types, query keys, hooks, form helpers, DrinkForm/
+│                 # DrinkStatusDialog components (Phase 3)
 ├── routes/       # AppRouter, ProtectedRoute, PublicRoute
-├── screens/      # Login, Dashboard, CafeList, CafeCreate, CafeDetail
+├── screens/      # Login, Dashboard, CafeList, CafeCreate, CafeDetail,
+│                 # DrinkList, DrinkCreate, DrinkDetail
 ├── types/        # shared ApiError/PageResponse shapes
 └── utils/        # errors.ts (safe error-message mapping, AdminAccessRequiredError,
                   # extractFieldErrors)

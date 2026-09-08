@@ -1,0 +1,124 @@
+.container {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+  padding: var(--spacing-xl);
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.breadcrumbs {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  display: flex;
+  gap: var(--spacing-xs);
+  flex-wrap: wrap;
+}
+
+.breadcrumbs a {
+  color: var(--color-accent);
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+}
+
+.title {
+  font-size: var(--font-size-xl);
+  font-weight: 700;
+  margin: 0;
+}
+
+.subtitle {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin: var(--spacing-xs) 0 0;
+}
+
+.addButton {
+  width: auto;
+  padding: 0 var(--spacing-md);
+  white-space: nowrap;
+}
+
+.notice {
+  background: var(--color-surface-muted);
+}
+
+.noticeText {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin: 0;
+  overflow-wrap: break-word;
+}
+
+.emptyMessage {
+  font-size: var(--font-size-md);
+  color: var(--color-text-secondary);
+}
+
+.resultList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.resultLink {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  text-decoration: none;
+  min-height: var(--touch-target-min);
+  justify-content: center;
+}
+
+.resultNameRow {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.resultName {
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.signatureBadge {
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  padding: 2px var(--spacing-sm);
+  border-radius: var(--radius-md);
+  background: var(--color-success-surface);
+  color: var(--color-success);
+}
+
+.resultMeta {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+@media (max-width: 768px) {
+  .container {
+    padding: var(--spacing-lg);
+  }
+
+  .header {
+    flex-direction: column;
+  }
+
+  .addButton {
+    width: 100%;
+  }
+}

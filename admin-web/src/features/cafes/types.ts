@@ -1,3 +1,5 @@
+import type { DrinkResponse } from '../drinks/types';
+
 // Mirrors com.socialcup.cafe.entity.CafeStatus exactly.
 export type CafeStatus = 'ACTIVE' | 'INACTIVE' | 'ARCHIVED';
 
@@ -37,6 +39,10 @@ export interface CafeSummaryResponse {
 // Mirrors com.socialcup.cafe.dto.CafeDetailResponse exactly - the public
 // GET /cafes/{id} response. Deliberately has NO payoutRate field - the
 // backend's own public DTO omits it, this is not an oversight here.
+// `drinks` is populated by CafeService.getCafeById via
+// drinkService.getActiveDrinksForCafe - ACTIVE drinks only, same limitation
+// as GET /cafes/{id}/drinks itself. This app must not treat it as a
+// complete drink list for the cafe.
 export interface CafeDetailResponse {
   id: string;
   name: string;
@@ -53,6 +59,7 @@ export interface CafeDetailResponse {
   description: string | null;
   status: CafeStatus;
   photos: CafePhotoDto[];
+  drinks: DrinkResponse[];
   createdAt: string;
   updatedAt: string;
 }
@@ -78,6 +85,7 @@ export interface AdminCafeDetailResponse {
   description: string | null;
   status: CafeStatus;
   photos: CafePhotoDto[];
+  drinks: DrinkResponse[];
   createdAt: string;
   updatedAt: string;
 }

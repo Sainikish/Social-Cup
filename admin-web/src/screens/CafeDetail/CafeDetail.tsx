@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { Link, useLocation, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 
 import { toApiError } from '../../api/client';
-import { Card, ErrorState, LoadingState } from '../../components';
+import { Button, Card, ErrorState, LoadingState } from '../../components';
 import {
   CafeForm,
   CafeStatusDialog,
@@ -40,6 +40,7 @@ const ALL_STATUSES: CafeStatus[] = ['ACTIVE', 'INACTIVE', 'ARCHIVED'];
 export function CafeDetail() {
   const { id } = useParams<{ id: string }>();
   const location = useLocation();
+  const navigate = useNavigate();
   const adminDetailFromNav = (location.state as CafeDetailLocationState | null)?.adminDetail;
 
   const [latestAdminDetail, setLatestAdminDetail] = useState<AdminCafeDetailResponse | undefined>(adminDetailFromNav);
@@ -162,6 +163,38 @@ export function CafeDetail() {
           {detail.status}
         </span>
       </header>
+
+      <section className={styles.section}>
+        <div className={styles.drinksSectionHeader}>
+          <h2 className={styles.sectionTitle}>Drinks</h2>
+          <div className={styles.drinkActions}>
+            <Button
+              label="Add Drink"
+              variant="outline"
+              onClick={() => navigate(`/cafes/${id}/drinks/new`, { state: { cafeName: detail.name } })}
+            />
+            <Link to={`/cafes/${id}/drinks`} state={{ cafeName: detail.name }}>
+              Manage Drinks
+            </Link>
+          </div>
+        </div>
+        <p className={styles.noticeText}>
+          Showing this cafe&apos;s <strong>active drinks only</strong> - inactive/archived drinks are not listed
+          here or in Manage Drinks (no admin drink-list endpoint exists yet).
+        </p>
+        {detail.drinks.length === 0 ? (
+          <p className={styles.emptyMessage}>No active drinks at this cafe yet.</p>
+        ) : (
+          <ul className={styles.drinkList}>
+            {detail.drinks.map((drink) => (
+              <li key={drink.id}>
+                {drink.name}
+                {drink.signature ? ' (Signature)' : ''}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       {!payoutRateKnown ? (
         <Card className={styles.notice}>

@@ -27,6 +27,7 @@ const SAMPLE_ADMIN_DETAIL: AdminCafeDetailResponse = {
   description: null,
   status: 'ACTIVE',
   photos: [],
+  drinks: [],
   createdAt: '2026-01-01T00:00:00Z',
   updatedAt: '2026-01-01T00:00:00Z',
 };

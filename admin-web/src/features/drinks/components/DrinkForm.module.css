@@ -1,0 +1,57 @@
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  max-width: 640px;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacing-md);
+}
+
+@media (max-width: 768px) {
+  .row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.checkboxRow {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  min-height: var(--touch-target-min);
+  font-size: var(--font-size-md);
+  color: var(--color-text-primary);
+}
+
+.checkboxRow input {
+  width: 20px;
+  height: 20px;
+}
+
+.textareaLabel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+}
+
+.textarea {
+  min-height: 120px;
+  padding: var(--spacing-sm);
+  font: inherit;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  resize: vertical;
+}
+
+.formError {
+  font-size: var(--font-size-sm);
+  color: var(--color-danger);
+  margin: 0;
+}

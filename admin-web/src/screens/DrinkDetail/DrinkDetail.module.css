@@ -13,6 +13,7 @@
   color: var(--color-text-secondary);
   display: flex;
   gap: var(--spacing-xs);
+  flex-wrap: wrap;
 }
 
 .breadcrumbs a {
@@ -53,16 +54,6 @@
 .statusBadge[data-status='ARCHIVED'] {
   background: var(--color-danger-surface);
   color: var(--color-danger);
-}
-
-.notice {
-  background: var(--color-surface-muted);
-}
-
-.noticeText {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
-  margin: 0;
 }
 
 .section {
@@ -106,47 +97,8 @@
   margin: 0;
 }
 
-.drinksSectionHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--spacing-md);
-  flex-wrap: wrap;
-}
-
-.drinkActions {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-md);
-}
-
-.drinkActions button {
-  width: auto;
-  padding: 0 var(--spacing-md);
-  white-space: nowrap;
-}
-
-.emptyMessage {
-  font-size: var(--font-size-md);
-  color: var(--color-text-secondary);
-  margin: 0;
-}
-
-.drinkList {
-  list-style: disc;
-  margin: 0;
-  padding-left: var(--spacing-lg);
-  font-size: var(--font-size-md);
-  color: var(--color-text-primary);
-}
-
 @media (max-width: 768px) {
   .container {
     padding: var(--spacing-lg);
-  }
-
-  .drinksSectionHeader {
-    flex-direction: column;
-    align-items: flex-start;
   }
 }
