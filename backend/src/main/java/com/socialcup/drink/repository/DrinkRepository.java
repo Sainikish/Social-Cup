@@ -47,4 +47,9 @@ public interface DrinkRepository extends JpaRepository<Drink, UUID> {
     // still respects the archived-is-not-found convention, without paying for
     // findByIdAndArchivedAtIsNull's cafe EntityGraph when only a boolean is needed.
     boolean existsByIdAndArchivedAtIsNull(UUID id);
+
+    // Phase 6E dashboard metric: total active, non-archived drinks across
+    // every cafe - the same filter findAllByCafeIdAndStatusAndArchivedAtIsNull
+    // already uses per cafe, here counted across all cafes at once.
+    long countByStatusAndArchivedAtIsNull(DrinkStatus status);
 }

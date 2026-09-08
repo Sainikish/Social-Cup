@@ -20,6 +20,11 @@ public interface MemberRepository extends JpaRepository<Member, UUID> {
 
     boolean existsByEmailAndDeletedAtIsNull(String email);
 
+    // Phase 6E dashboard metric: total non-deleted members. A plain derived
+    // count query - same "not deleted" filter findByIdAndDeletedAtIsNull
+    // already establishes, just counted instead of fetched.
+    long countByDeletedAtIsNull();
+
     // The per-member serialization point for credit deduction (see
     // CreditService.deductForRedemption): SELECT ... FOR UPDATE via Spring
     // Data JPA's standard @Lock support, not a custom native locking query.

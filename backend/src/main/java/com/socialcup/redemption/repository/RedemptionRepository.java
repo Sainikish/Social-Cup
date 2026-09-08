@@ -37,4 +37,11 @@ public interface RedemptionRepository extends JpaRepository<Redemption, UUID>, J
         @Param("cafeId") UUID cafeId,
         @Param("periodStart") Instant periodStart,
         @Param("periodEndExclusive") Instant periodEndExclusive);
+
+    // Phase 6E dashboard metric: total credits ever deducted across every
+    // redemption, aggregated server-side rather than loading every row into
+    // memory to sum in Java. COALESCE guarantees 0 (never null) when the
+    // table is empty.
+    @Query("SELECT COALESCE(SUM(r.creditsDeducted), 0) FROM Redemption r")
+    long sumCreditsDeducted();
 }

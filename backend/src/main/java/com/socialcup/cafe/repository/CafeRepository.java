@@ -19,6 +19,11 @@ public interface CafeRepository extends JpaRepository<Cafe, UUID> {
 
     Page<Cafe> findAllByStatusAndArchivedAtIsNull(CafeStatus status, Pageable pageable);
 
+    // Phase 6E dashboard metric: total active, non-archived cafes - the same
+    // filter findAllByStatusAndArchivedAtIsNull already uses, counted instead
+    // of paged.
+    long countByStatusAndArchivedAtIsNull(CafeStatus status);
+
     Page<Cafe> findAllByFeaturedTrueAndStatusAndArchivedAtIsNull(CafeStatus status, Pageable pageable);
 
     Page<Cafe> findAllByNeighbourhoodIgnoreCaseAndStatusAndArchivedAtIsNull(String neighbourhood, CafeStatus status, Pageable pageable);

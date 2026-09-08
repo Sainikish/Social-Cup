@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -32,4 +33,14 @@ public interface PayoutRepository extends JpaRepository<Payout, UUID> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT p FROM Payout p WHERE p.id = :id AND p.cafe.id = :cafeId")
     Optional<Payout> findByIdAndCafeIdForUpdate(@Param("id") UUID id, @Param("cafeId") UUID cafeId);
+
+    // Phase 6E dashboard metrics: total amount owed/paid across every payout
+    // ever calculated, aggregated server-side rather than loading every
+    // Payout row into memory to sum in Java. COALESCE guarantees a real
+    // BigDecimal.ZERO-equivalent value (never null) when no payout exists yet.
+    @Query("SELECT COALESCE(SUM(p.amountOwed), 0) FROM Payout p")
+    BigDecimal sumAmountOwed();
+
+    @Query("SELECT COALESCE(SUM(p.amountPaid), 0) FROM Payout p")
+    BigDecimal sumAmountPaid();
 }
