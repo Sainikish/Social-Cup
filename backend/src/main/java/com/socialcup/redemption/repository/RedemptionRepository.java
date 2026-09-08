@@ -2,6 +2,7 @@ package com.socialcup.redemption.repository;
 
 import com.socialcup.redemption.entity.Redemption;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -10,8 +11,17 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
+// JpaSpecificationExecutor backs the admin filtered/paginated read below
+// (see RedemptionSpecifications) - a plain "(:param IS NULL OR ...)" @Query
+// was tried first and rejected: Postgres cannot determine the type of a bare
+// null UUID/Instant parameter used only in an IS NULL check ("could not
+// determine data type of parameter"), and casting it (e.g. CAST(:x AS uuid))
+// fails differently ("cannot cast type bytea to uuid") because Hibernate
+// binds a null UUID parameter as a binary value. A Specification sidesteps
+// both failure modes entirely: an absent filter simply never becomes a bind
+// parameter at all, rather than becoming a null one Postgres has to type.
 @Repository
-public interface RedemptionRepository extends JpaRepository<Redemption, UUID> {
+public interface RedemptionRepository extends JpaRepository<Redemption, UUID>, JpaSpecificationExecutor<Redemption> {
 
     // Phase E: the historical source of truth PayoutService reads from - each
     // returned row already carries its own snapshotted payout_rate (Phase D),

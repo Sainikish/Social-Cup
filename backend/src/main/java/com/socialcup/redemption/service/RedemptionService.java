@@ -5,19 +5,27 @@ import com.socialcup.cafe.entity.CafeStatus;
 import com.socialcup.cafe.repository.CafeRepository;
 import com.socialcup.common.exception.ConflictException;
 import com.socialcup.common.exception.ResourceNotFoundException;
+import com.socialcup.common.dto.PageResponse;
 import com.socialcup.credit.service.CreditService;
 import com.socialcup.drink.entity.Drink;
 import com.socialcup.drink.entity.DrinkStatus;
 import com.socialcup.drink.repository.DrinkRepository;
+import com.socialcup.redemption.dto.AdminRedemptionResponse;
 import com.socialcup.redemption.dto.RedemptionResponse;
 import com.socialcup.redemption.entity.Redemption;
 import com.socialcup.redemption.entity.RedemptionCode;
 import com.socialcup.redemption.repository.RedemptionCodeRepository;
 import com.socialcup.redemption.repository.RedemptionRepository;
+import com.socialcup.redemption.repository.RedemptionSpecifications;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.UUID;
 
 // Phase D: the atomic redemption transaction. A previously-issued
@@ -106,5 +114,23 @@ public class RedemptionService {
         redemptionCodeRepository.save(redemptionCode);
 
         return RedemptionResponse.fromEntity(savedRedemption);
+    }
+
+    // Phase 6C: read-only admin reporting over the same append-only
+    // redemption history redeem() writes above. Reuses the existing
+    // repository/entity - no new table, no mutation path, and `to` is treated
+    // as an EXCLUSIVE upper bound (see findAllByCafeIdAndCreatedAtBetween's own
+    // note) via the same LocalDate -> UTC start-of-day conversion
+    // PayoutService.calculatePayout already uses for periodStart/periodEnd.
+    @Transactional(readOnly = true)
+    public PageResponse<AdminRedemptionResponse> getRedemptionsForAdmin(
+            UUID cafeId, UUID memberId, UUID drinkId, LocalDate from, LocalDate to, Pageable pageable) {
+        Instant fromInstant = from != null ? from.atStartOfDay(ZoneOffset.UTC).toInstant() : null;
+        Instant toExclusiveInstant = to != null ? to.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant() : null;
+
+        Specification<Redemption> spec = RedemptionSpecifications.forAdmin(
+            cafeId, memberId, drinkId, fromInstant, toExclusiveInstant);
+        Page<Redemption> page = redemptionRepository.findAll(spec, pageable);
+        return PageResponse.of(page, AdminRedemptionResponse::fromEntity);
     }
 }
