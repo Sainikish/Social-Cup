@@ -4,11 +4,13 @@ import { useAuth } from '../../auth/AuthContext';
 import { Button, Card } from '../../components';
 import styles from './Dashboard.module.css';
 
-// Placeholder only, per Phase 1 scope - no metrics, no subscription/
-// redemption/payout/audit-log data of any kind. Drink management is reached
-// via Cafe Detail rather than linked here directly (a drink always belongs
-// to a specific cafe). Member Management (Phase 4) has no list/search to
-// browse from here either - see MemberLookup for why.
+// Placeholder only, per Phase 1 scope - no metrics, no redemption/payout/
+// audit-log data of any kind, and no subscription counts/revenue figures
+// either (GET /admin/subscriptions is read-only and this link is a plain
+// nav entry, not a dashboard card backed by its own API call). Drink
+// management is reached via Cafe Detail rather than linked here directly
+// (a drink always belongs to a specific cafe). Member Management (Phase 4)
+// has no list/search to browse from here either - see MemberLookup for why.
 export function Dashboard() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -26,6 +28,11 @@ export function Dashboard() {
         <div className={styles.navButtons}>
           <Button label="Manage Cafes" onClick={() => navigate('/cafes')} className={styles.manageCafesButton} />
           <Button label="Manage Members" onClick={() => navigate('/members')} className={styles.manageCafesButton} />
+          <Button
+            label="Manage Subscriptions"
+            onClick={() => navigate('/subscriptions')}
+            className={styles.manageCafesButton}
+          />
         </div>
       </Card>
     </div>

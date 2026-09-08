@@ -81,4 +81,12 @@ describe('Dashboard', () => {
 
     expect(screen.getByText('Manage Members')).toBeInTheDocument();
   });
+
+  it('links to /subscriptions via the "Manage Subscriptions" button', () => {
+    mockUseAuth.mockReturnValue(authValue());
+
+    renderDashboard();
+
+    expect(screen.getByText('Manage Subscriptions')).toBeInTheDocument();
+  });
 });

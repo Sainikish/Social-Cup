@@ -10,6 +10,7 @@ import { DrinkList } from '../screens/DrinkList/DrinkList';
 import { Login } from '../screens/Login/Login';
 import { MemberDetail } from '../screens/MemberDetail/MemberDetail';
 import { MemberLookup } from '../screens/MemberLookup/MemberLookup';
+import { SubscriptionList } from '../screens/SubscriptionList/SubscriptionList';
 import { ProtectedRoute } from './ProtectedRoute';
 import { PublicRoute } from './PublicRoute';
 
@@ -93,6 +94,14 @@ export function AppRouter() {
         element={
           <ProtectedRoute>
             <MemberDetail />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/subscriptions"
+        element={
+          <ProtectedRoute>
+            <SubscriptionList />
           </ProtectedRoute>
         }
       />

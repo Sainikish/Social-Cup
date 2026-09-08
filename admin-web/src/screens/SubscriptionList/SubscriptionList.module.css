@@ -1,0 +1,115 @@
+.container {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+  padding: var(--spacing-xl);
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.title {
+  font-size: var(--font-size-xl);
+  font-weight: 700;
+  margin: 0;
+}
+
+.notice {
+  background: var(--color-surface-muted);
+}
+
+.noticeText {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+.emptyMessage {
+  font-size: var(--font-size-md);
+  color: var(--color-text-secondary);
+}
+
+/* Wide tables scroll horizontally within their own container rather than
+   forcing the page itself to scroll sideways or wrapping cell content
+   destructively. */
+.tableScroll {
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+}
+
+.table th,
+.table td {
+  padding: var(--spacing-sm) var(--spacing-md);
+  text-align: left;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.table th {
+  background: var(--color-surface-muted);
+  color: var(--color-text-secondary);
+  font-weight: 600;
+}
+
+.table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.memberCell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.memberEmail {
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+
+.memberId {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.periodCell {
+  color: var(--color-text-primary);
+}
+
+.statusBadge {
+  display: inline-block;
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.statusBadge[data-status='ACTIVE'] {
+  background: var(--color-success-surface);
+  color: var(--color-success);
+}
+
+.statusBadge[data-status='PAST_DUE'] {
+  background: var(--color-warning);
+  color: var(--color-text-inverse);
+}
+
+.statusBadge[data-status='CANCELLED'] {
+  background: var(--color-danger-surface);
+  color: var(--color-danger);
+}
+
+@media (max-width: 768px) {
+  .container {
+    padding: var(--spacing-lg);
+  }
+}

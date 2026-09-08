@@ -3,9 +3,10 @@
 The internal admin web app for Social Cup staff: log in with an administrator account and
 manage the platform. **Phase 1** implemented the foundation and authentication. **Phase 2**
 added Cafe Management (create, edit, status change). **Phase 3** added Drink/Menu Management
-(create, edit, status change, per-cafe display). **Phase 4** adds Member Management (suspend,
-reactivate) - see below for what this deliberately does NOT include, and why. Subscription/
-redemption/payout/audit-log management and dashboard metrics are separate, later phases.
+(create, edit, status change, per-cafe display). **Phase 4** added Member Management (suspend,
+reactivate). **Phase 5** adds a read-only Subscription list - see below for what this
+deliberately does NOT include, and why. Redemption/payout/audit-log management and dashboard
+metrics are separate, later phases.
 
 ## Admin authentication
 
@@ -180,6 +181,56 @@ No fake or mock member data is used anywhere in this app. Member search, member 
 pagination/filtering of members, credit-balance display, and redemption-history display are
 all explicitly deferred pending a backend API - see above.
 
+## Subscription Management (Phase 5)
+
+Entry point: a "Manage Subscriptions" button on the Dashboard, leading to `/subscriptions` -
+a **read-only** list. Requires an authenticated ADMIN session via the same `ProtectedRoute`
+Phase 1 established. This link adds no dashboard card, count, or metric of its own - it is a
+plain navigation entry, not a widget backed by its own API call.
+
+### Endpoint consumed
+
+| Purpose | Endpoint | Notes |
+| --- | --- | --- |
+| List every subscription | `GET /admin/subscriptions` | Admin-only, flat unpaginated array, no query parameters |
+
+### Fields displayed
+
+Exactly the fields `AdminSubscriptionResponse` returns, and nothing else: member email, member
+ID, status (`ACTIVE` / `PAST_DUE` / `CANCELLED` - the backend's own enum values, shown as-is),
+current period start/end, whether the subscription is set to cancel at period end (shown as a
+plain Yes/No), and the payment-failed count (shown as the exact number returned). The status
+badge always reflects the backend's own `status` field - it is never inferred from
+`cancelAtPeriodEnd`, `paymentFailedCount`, or the period dates.
+
+### Backend limitations (by design, not an incomplete implementation)
+
+**This phase is read-only because the backend itself is read-only here** -
+`AdminSubscriptionController` exposes exactly one `@GetMapping`, nothing else:
+
+- **No pagination or filtering endpoint exists.** `getAllSubscriptions()` calls
+  `subscriptionRepository.findAll()` directly and returns every row as a plain list - there is
+  no `page`/`size`/`status`/`search`/`memberId` query parameter on the backend to send, so this
+  app sends none and shows the full list the backend returns, in whatever order it arrives.
+  No pagination controls are shown, because pretending to paginate a response the backend
+  already returns in full would misrepresent the actual data.
+- **No individual subscription GET endpoint exists** - there is no `/admin/subscriptions/{id}`,
+  so this app has no per-subscription detail screen or deep link.
+- **No admin cancellation or reactivation endpoint exists.** The only subscription-cancel
+  endpoint in the entire backend is member-facing (`DELETE /users/me/subscription`) and reads
+  its target member from the caller's own JWT - it structurally cannot act on someone else's
+  subscription, and this app never calls it. There is no cancel/reactivate button anywhere in
+  this screen.
+- **No Stripe identifiers are exposed.** `AdminSubscriptionResponse` deliberately omits
+  `stripeCustomerId`/`stripeSubscriptionId` (present on the entity, absent from this DTO), and
+  also omits `cancelledAt`/`lastPaymentError`. This app cannot show what the backend does not
+  return, and does not fabricate them.
+- No revenue, MRR/ARR, or churn figures are calculated - the backend exposes no financial
+  aggregation endpoint, and this app performs no such calculation client-side.
+
+No fake or mock subscription data, pagination, search, filtering, or mutation of any kind is
+used anywhere in this app.
+
 ## Prerequisites
 
 - Node.js 20+ and npm
@@ -239,11 +290,14 @@ src/
 │   │             # domain feature; Phase 1 was pure auth/foundation)
 │   ├── drinks/   # drink API calls, types, query keys, hooks, form helpers, DrinkForm/
 │   │             # DrinkStatusDialog components (Phase 3)
-│   └── members/  # member API calls (suspend/reactivate only - no list/search/detail
-│                 # endpoint exists), types, query keys, hooks, MemberActionDialog (Phase 4)
+│   ├── members/  # member API calls (suspend/reactivate only - no list/search/detail
+│   │             # endpoint exists), types, query keys, hooks, MemberActionDialog (Phase 4)
+│   └── subscriptions/ # a single read-only list call, types, query key, hook (Phase 5) -
+│                 # no mutation, no per-subscription detail
 ├── routes/       # AppRouter, ProtectedRoute, PublicRoute
 ├── screens/      # Login, Dashboard, CafeList, CafeCreate, CafeDetail,
-│                 # DrinkList, DrinkCreate, DrinkDetail, MemberLookup, MemberDetail
+│                 # DrinkList, DrinkCreate, DrinkDetail, MemberLookup, MemberDetail,
+│                 # SubscriptionList
 ├── types/        # shared ApiError/PageResponse shapes
 └── utils/        # errors.ts (safe error-message mapping, AdminAccessRequiredError,
                   # extractFieldErrors)
