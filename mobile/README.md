@@ -233,19 +233,19 @@ be linked (`eas init`) and platform identifiers set first.
 
 ## Known limitations / release blockers
 
-- **No EAS project linked yet** - `eas init` (requires an authenticated Expo account) has
-  not been run, so `eas.json`'s profiles cannot actually build until that's done. As a
-  consequence, no `EXPO_PUBLIC_API_URL` value has been created in any EAS Environment
-  either - that also requires a linked, authenticated project, and the real staging/
-  production backend URLs are not decided in this repository yet.
-- **No `ios.bundleIdentifier` / `android.package` set** in `app.config.ts` - required
-  before any real (non-Expo-Go) build or store submission. Deliberately left unset here
-  rather than invented, since this repository hasn't defined real ones yet.
+- **`app.config.ts` already sets `ios.bundleIdentifier` / `android.package`**
+  (`com.nforceone.socialcup`) and an `extra.eas.projectId`. Whether that project ID
+  corresponds to a live, authenticated EAS project has not been verified here - that
+  requires confirming against a real Expo account (e.g. `eas whoami`, `eas build:list`),
+  which is outside what this repository alone can attest to. If it isn't yet linked, no
+  `EXPO_PUBLIC_API_URL` value has been created in any EAS Environment either - that also
+  requires a linked, authenticated project, and the real staging/production backend URLs
+  are not decided in this repository yet.
 - **No app icons/splash images beyond Expo's scaffolded defaults.**
-- **TanStack Query's `onlineManager`** (network-reconnect detection) is not wired to a
-  real connectivity source - doing so correctly needs `@react-native-community/netinfo`,
-  a dependency not currently installed. `focusManager` (foreground/background via
-  `AppState`) _is_ wired, in `src/hooks/useAppStateFocusManager.ts`.
+- **TanStack Query's `onlineManager`** is wired to `@react-native-community/netinfo` in
+  `src/hooks/useOnlineManager.ts`, mirroring `useAppStateFocusManager.ts`'s `AppState`
+  wiring - so `refetchOnReconnect` (see `src/lib/queryClient.ts`) now fires on a real
+  connectivity change, not just app foreground/background.
 - **No physical device / emulator verification has been performed in CI or by an agent**
   - all verification to date is `jest`/`@testing-library/react-native` plus
     `expo export --platform {ios,android}` (Metro bundle compilation only).
