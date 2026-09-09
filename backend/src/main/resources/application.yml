@@ -16,7 +16,15 @@ spring:
         order_updates: true
   spring:
   datasource:
-    url: jdbc:postgresql://${PGHOST}:${PGPORT}/${PGDATABASE}
+    # PGSSLMODE defaults to empty (URL unchanged) - Railway's own deployed
+    # instance never sets it, so this is a no-op there. It exists only for
+    # connecting from outside Railway's private network (e.g. a local machine
+    # via the public proxy), where the pgjdbc driver's default SSL/channel-
+    # binding negotiation fails against Railway's public TCP proxy with
+    # "Connection reset" - set PGSSLMODE=?sslmode=disable locally to work
+    # around that. Never needed for the internal-network connection the
+    # deployed app itself actually uses.
+    url: jdbc:postgresql://${PGHOST}:${PGPORT}/${PGDATABASE}${PGSSLMODE:}
     username: ${PGUSER}
     password: ${PGPASSWORD}
 
