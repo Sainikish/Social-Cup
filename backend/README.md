@@ -98,15 +98,19 @@ An unauthenticated request to *any* non-public path — including one that doesn
 returns 401 `UNAUTHENTICATED`, not 404. Spring Security's `AuthorizationFilter` runs before
 routing, so it never leaks which paths exist to a caller who hasn't proven who they are.
 
-### Authentication & authorization (foundation only)
+### Authentication & authorization
 
 `JwtTokenProvider` issues and validates HS256 JWTs (access: 15 min, refresh: 30 days — both
 configurable). `JwtAuthenticationFilter` reads a `Bearer` token if present and populates the
 security context; a missing or invalid token is not rejected in the filter itself, it just
 leaves the request anonymous, and `SecurityConfig`'s `authorizeHttpRequests` rules decide
-from there. There is no `/auth/**` endpoint yet to issue tokens — `/auth/**` is reserved and
-already public in `SecurityConfig`. `Roles` (`MEMBER`, `ADMIN`, `BARISTA`) are the constants
-future `@PreAuthorize("hasRole(...)")` checks should use.
+from there. `AuthController` (`/auth/**`, public in `SecurityConfig`) issues these tokens:
+`POST /auth/register` and `POST /auth/login` (email/password, BCrypt-hashed, account lockout
+after 5 failed attempts for 15 minutes), `POST /auth/refresh` (rotates a refresh token for a
+new pair, re-reading the member's current role each time so a promotion/demotion takes effect
+on next refresh rather than staying stale until re-login), and `GET /auth/me`. `Roles`
+(`MEMBER`, `ADMIN`, `BARISTA`) are the constants `@PreAuthorize("hasRole(...)")` checks use
+throughout the other modules.
 
 ### Correlation IDs
 
@@ -217,7 +221,7 @@ backend/
 │   │   │   ├── exception/         # GlobalExceptionHandler, SocialCupException and subtypes
 │   │   │   └── web/               # RequestIdFilter, RateLimiter/Filter, FilterParser, ApiErrorResponseWriter
 │   │   ├── security/              # JwtTokenProvider, JwtAuthenticationFilter, Roles, entry point/access denied handler
-│   │   ├── auth/                  # Authentication module (not yet implemented)
+│   │   ├── auth/                  # Member auth (register/login/refresh/me) - AuthController
 │   │   ├── user/                # User/Member module
 │   │   ├── cafe/                # Cafe module
 │   │   ├── drink/               # Drink menu module
@@ -438,17 +442,17 @@ java -version
 
 ## Next Steps
 
-Cross-cutting infrastructure (error handling, request/response conventions, auth
-foundation, rate limiting, correlation IDs, actuator probes) is done — see
-[API Conventions](#api-conventions). Still open:
+Cross-cutting infrastructure (error handling, request/response conventions, auth, rate
+limiting, correlation IDs, actuator probes) is done — see [API Conventions](#api-conventions).
+So is every business module listed under [Project Structure](#project-structure) above (auth,
+user, cafe, drink, rating, subscription, credit, redemption, payout, admin, barista), including
+Stripe subscription billing and webhook handling (`StripeWebhookController`, with
+`ProcessedWebhookEvent` guarding against duplicate delivery). Still open:
 
-- Implement the `/auth/**` endpoints (signup, login, OAuth2, token refresh) that actually
-  issue the JWTs `JwtTokenProvider` already knows how to create and validate
-- Implement user management module (first real `@Entity`/`@Repository` — re-enable
-  Testcontainers-backed integration tests once one exists)
-- Implement cafe management module
-- Configure Stripe webhook handling
-- Configure AWS SDK clients
+- Real file storage for cafe/drink photos: `CafePhoto`/drink photo fields are plain URL strings
+  today (see `admin-web/README.md`'s photo-display sections) — there's no upload endpoint or
+  AWS SDK client anywhere in this module, so a photo URL must already point at some externally
+  hosted image
 
 ## Support
 
