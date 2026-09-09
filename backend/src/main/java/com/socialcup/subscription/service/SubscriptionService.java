@@ -138,6 +138,33 @@ public class SubscriptionService {
         return SubscriptionResponse.fromEntity(saved);
     }
 
+    // Called only from AuthService.deleteAccount, never from the member-facing
+    // cancel endpoint above - an account being deleted must stop being billed
+    // immediately, not at the end of a period it will no longer exist to use.
+    // Deliberately a separate method rather than a parameter on cancel(): the
+    // two have different Stripe calls (cancel() vs update()) and different
+    // local semantics (CANCELLED right away vs. cancelAtPeriodEnd first), and
+    // this must never change cancel()'s existing voluntary-cancellation
+    // behavior. A missing or already-cancelled subscription is a silent
+    // no-op - account deletion must succeed whether or not the member ever
+    // subscribed.
+    public void cancelImmediatelyForAccountDeletion(UUID memberId) {
+        Subscription subscription = subscriptionRepository.findByMemberId(memberId).orElse(null);
+        if (subscription == null || subscription.getStatus() == SubscriptionStatus.CANCELLED) {
+            return;
+        }
+
+        try {
+            com.stripe.model.Subscription.retrieve(subscription.getStripeSubscriptionId()).cancel();
+        } catch (StripeException e) {
+            throw new ConflictException("Unable to cancel subscription: " + e.getMessage());
+        }
+
+        subscription.setStatus(SubscriptionStatus.CANCELLED);
+        subscription.setCancelledAt(Instant.now());
+        subscriptionRepository.save(subscription);
+    }
+
     @Transactional(readOnly = true)
     public SubscriptionResponse getMySubscription(UUID memberId) {
         Subscription subscription = subscriptionRepository.findByMemberId(memberId)

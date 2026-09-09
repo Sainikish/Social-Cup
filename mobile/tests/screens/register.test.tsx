@@ -38,6 +38,7 @@ describe('RegisterScreen', () => {
       login: jest.fn(),
       register: mockRegister,
       logout: jest.fn(),
+      deleteAccount: jest.fn(),
       initializeAuth: jest.fn(),
     });
 
@@ -67,6 +68,7 @@ describe('RegisterScreen', () => {
       login: jest.fn(),
       register: mockRegister,
       logout: jest.fn(),
+      deleteAccount: jest.fn(),
       initializeAuth: jest.fn(),
     });
 
@@ -105,6 +107,7 @@ describe('RegisterScreen', () => {
       login: jest.fn(),
       register: mockRegister,
       logout: jest.fn(),
+      deleteAccount: jest.fn(),
       initializeAuth: jest.fn(),
     });
 

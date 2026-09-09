@@ -2,7 +2,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, type PressableProps } f
 
 import { colors, radius, spacing, fontSize, fontWeight } from '../theme';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'outline';
+export type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'danger';
 
 export interface ButtonProps extends Omit<PressableProps, 'style'> {
   label: string;
@@ -33,12 +33,31 @@ export function Button({
       {...pressableProps}
     >
       {loading ? (
-        <ActivityIndicator color={variant === 'outline' ? colors.primary : colors.onPrimary} />
+        <ActivityIndicator color={spinnerColor(variant)} />
       ) : (
-        <Text style={[styles.label, variant === 'outline' && styles.labelOutline]}>{label}</Text>
+        <Text
+          style={[
+            styles.label,
+            variant === 'outline' && styles.labelOutline,
+            variant === 'danger' && styles.labelDanger,
+          ]}
+        >
+          {label}
+        </Text>
       )}
     </Pressable>
   );
+}
+
+function spinnerColor(variant: ButtonVariant): string {
+  switch (variant) {
+    case 'outline':
+      return colors.primary;
+    case 'danger':
+      return colors.danger;
+    default:
+      return colors.onPrimary;
+  }
 }
 
 const styles = StyleSheet.create({
@@ -63,6 +82,9 @@ const styles = StyleSheet.create({
   labelOutline: {
     color: colors.primary,
   },
+  labelDanger: {
+    color: colors.danger,
+  },
 });
 
 const variantStyles = StyleSheet.create({
@@ -76,5 +98,10 @@ const variantStyles = StyleSheet.create({
     backgroundColor: 'transparent',
     borderWidth: 1,
     borderColor: colors.primary,
+  },
+  danger: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: colors.danger,
   },
 });

@@ -236,6 +236,101 @@ class SubscriptionServiceTest {
             .isInstanceOf(ConflictException.class);
     }
 
+    // ---- Cancel immediately (account deletion) ----
+
+    @Test
+    void cancelImmediatelyForAccountDeletion_activeSubscription_cancelsInStripeRightAway_andMarksCancelledLocally()
+            throws Exception {
+        Subscription existing = new Subscription();
+        existing.setStatus(SubscriptionStatus.ACTIVE);
+        existing.setStripeSubscriptionId("sub_123");
+        when(subscriptionRepository.findByMemberId(MEMBER_ID)).thenReturn(Optional.of(existing));
+        when(subscriptionRepository.save(any(Subscription.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        com.stripe.model.Subscription retrieved = mock(com.stripe.model.Subscription.class);
+        when(retrieved.cancel()).thenReturn(retrieved);
+
+        try (MockedStatic<com.stripe.model.Subscription> subStatic = mockStatic(com.stripe.model.Subscription.class)) {
+            subStatic.when(() -> com.stripe.model.Subscription.retrieve("sub_123")).thenReturn(retrieved);
+
+            subscriptionService.cancelImmediatelyForAccountDeletion(MEMBER_ID);
+
+            // The immediate path, never the graceful update() used by cancel()
+            // above - a deleted account must stop being billed right away.
+            org.mockito.Mockito.verify(retrieved, never()).update(any(SubscriptionUpdateParams.class));
+        }
+
+        assertThat(existing.getStatus()).isEqualTo(SubscriptionStatus.CANCELLED);
+        assertThat(existing.getCancelledAt()).isNotNull();
+    }
+
+    @Test
+    void cancelImmediatelyForAccountDeletion_pastDueSubscription_isAlsoCancelled() throws Exception {
+        Subscription existing = new Subscription();
+        existing.setStatus(SubscriptionStatus.PAST_DUE);
+        existing.setStripeSubscriptionId("sub_123");
+        when(subscriptionRepository.findByMemberId(MEMBER_ID)).thenReturn(Optional.of(existing));
+        when(subscriptionRepository.save(any(Subscription.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        com.stripe.model.Subscription retrieved = mock(com.stripe.model.Subscription.class);
+        when(retrieved.cancel()).thenReturn(retrieved);
+
+        try (MockedStatic<com.stripe.model.Subscription> subStatic = mockStatic(com.stripe.model.Subscription.class)) {
+            subStatic.when(() -> com.stripe.model.Subscription.retrieve("sub_123")).thenReturn(retrieved);
+
+            subscriptionService.cancelImmediatelyForAccountDeletion(MEMBER_ID);
+        }
+
+        assertThat(existing.getStatus()).isEqualTo(SubscriptionStatus.CANCELLED);
+    }
+
+    @Test
+    void cancelImmediatelyForAccountDeletion_noSubscription_isASilentNoOp() {
+        when(subscriptionRepository.findByMemberId(MEMBER_ID)).thenReturn(Optional.empty());
+
+        subscriptionService.cancelImmediatelyForAccountDeletion(MEMBER_ID);
+
+        verify(subscriptionRepository, never()).save(any());
+    }
+
+    @Test
+    void cancelImmediatelyForAccountDeletion_alreadyCancelled_doesNotCallStripeAgain() {
+        Subscription existing = new Subscription();
+        existing.setStatus(SubscriptionStatus.CANCELLED);
+        existing.setStripeSubscriptionId("sub_123");
+        when(subscriptionRepository.findByMemberId(MEMBER_ID)).thenReturn(Optional.of(existing));
+
+        try (MockedStatic<com.stripe.model.Subscription> subStatic = mockStatic(com.stripe.model.Subscription.class)) {
+            subscriptionService.cancelImmediatelyForAccountDeletion(MEMBER_ID);
+
+            subStatic.verify(() -> com.stripe.model.Subscription.retrieve(any()), never());
+        }
+
+        verify(subscriptionRepository, never()).save(any());
+    }
+
+    @Test
+    void cancelImmediatelyForAccountDeletion_whenStripeThrows_propagatesAsConflict_andDoesNotChangeLocalStatus()
+            throws Exception {
+        Subscription existing = new Subscription();
+        existing.setStatus(SubscriptionStatus.ACTIVE);
+        existing.setStripeSubscriptionId("sub_123");
+        when(subscriptionRepository.findByMemberId(MEMBER_ID)).thenReturn(Optional.of(existing));
+
+        com.stripe.model.Subscription retrieved = mock(com.stripe.model.Subscription.class);
+        when(retrieved.cancel()).thenThrow(new ApiConnectionException("Stripe unreachable"));
+
+        try (MockedStatic<com.stripe.model.Subscription> subStatic = mockStatic(com.stripe.model.Subscription.class)) {
+            subStatic.when(() -> com.stripe.model.Subscription.retrieve("sub_123")).thenReturn(retrieved);
+
+            assertThatThrownBy(() -> subscriptionService.cancelImmediatelyForAccountDeletion(MEMBER_ID))
+                .isInstanceOf(ConflictException.class);
+        }
+
+        assertThat(existing.getStatus()).isEqualTo(SubscriptionStatus.ACTIVE);
+        verify(subscriptionRepository, never()).save(any());
+    }
+
     // ---- Read ----
 
     @Test

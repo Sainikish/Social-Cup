@@ -1,5 +1,7 @@
 package com.socialcup.auth.service;
 
+import com.socialcup.admin.entity.AuditLog;
+import com.socialcup.admin.repository.AuditLogRepository;
 import com.socialcup.auth.dto.AuthResponse;
 import com.socialcup.auth.dto.LoginRequest;
 import com.socialcup.auth.dto.MemberDto;
@@ -12,6 +14,7 @@ import com.socialcup.common.exception.ConflictException;
 import com.socialcup.common.exception.ResourceNotFoundException;
 import com.socialcup.security.JwtTokenProvider;
 import com.socialcup.security.Roles;
+import com.socialcup.subscription.service.SubscriptionService;
 import com.socialcup.user.entity.Member;
 import com.socialcup.user.entity.MemberRole;
 import com.socialcup.user.entity.MemberStatus;
@@ -52,11 +55,18 @@ class AuthServiceTest {
     @Mock
     private JwtTokenProvider tokenProvider;
 
+    @Mock
+    private SubscriptionService subscriptionService;
+
+    @Mock
+    private AuditLogRepository auditLogRepository;
+
     private AuthService authService;
 
     @BeforeEach
     void setUp() {
-        authService = new AuthService(memberRepository, passwordEncoder, tokenProvider, 15);
+        authService = new AuthService(
+            memberRepository, passwordEncoder, tokenProvider, subscriptionService, auditLogRepository, 15);
     }
 
     @Test
@@ -334,5 +344,115 @@ class AuthServiceTest {
 
         assertThatThrownBy(() -> authService.getCurrentMember(memberId))
             .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    // ---- Delete account ----
+
+    private static Member deletableMember(UUID id) {
+        Member member = new Member();
+        member.setId(id);
+        member.setEmail("ada@example.com");
+        member.setPasswordHash("hashed-pwd");
+        member.setFirstName("Ada");
+        member.setLastName("Lovelace");
+        member.setAvatarUrl("https://example.com/ada.jpg");
+        member.setGoogleId("google-123");
+        member.setAppleId("apple-123");
+        member.setCoffeePreferences("latte,espresso");
+        member.setHomeNeighborhood("Downtown");
+        member.setStatus(MemberStatus.ACTIVE);
+        return member;
+    }
+
+    @Test
+    void deleteAccount_success_anonymizesPii_setsDeletedAt_andWritesAnAuditLogEntry() {
+        UUID memberId = UUID.randomUUID();
+        Member member = deletableMember(memberId);
+        when(memberRepository.findByIdAndDeletedAtIsNullForUpdate(memberId)).thenReturn(Optional.of(member));
+        when(memberRepository.getReferenceById(memberId)).thenReturn(member);
+
+        authService.deleteAccount(memberId);
+
+        assertThat(member.getEmail()).endsWith("@deleted.socialcup.invalid");
+        assertThat(member.getEmail()).isNotEqualTo("ada@example.com");
+        assertThat(member.getPasswordHash()).isNull();
+        assertThat(member.getFirstName()).isNull();
+        assertThat(member.getLastName()).isNull();
+        assertThat(member.getAvatarUrl()).isNull();
+        assertThat(member.getGoogleId()).isNull();
+        assertThat(member.getAppleId()).isNull();
+        assertThat(member.getCoffeePreferences()).isNull();
+        assertThat(member.getHomeNeighborhood()).isNull();
+        assertThat(member.getDeletedAt()).isNotNull();
+        verify(memberRepository).save(member);
+
+        ArgumentCaptor<AuditLog> captor = ArgumentCaptor.forClass(AuditLog.class);
+        verify(auditLogRepository).save(captor.capture());
+        AuditLog auditLog = captor.getValue();
+        assertThat(auditLog.getAction()).isEqualTo("MEMBER_ACCOUNT_DELETED");
+        assertThat(auditLog.getEntityType()).isEqualTo("member");
+        assertThat(auditLog.getEntityId()).isEqualTo(memberId.toString());
+    }
+
+    @Test
+    void deleteAccount_generatesADifferentPlaceholderEmailEachTime_soTwoDeletedMembersNeverCollide() {
+        UUID memberIdA = UUID.randomUUID();
+        UUID memberIdB = UUID.randomUUID();
+        Member memberA = deletableMember(memberIdA);
+        Member memberB = deletableMember(memberIdB);
+        when(memberRepository.findByIdAndDeletedAtIsNullForUpdate(memberIdA)).thenReturn(Optional.of(memberA));
+        when(memberRepository.findByIdAndDeletedAtIsNullForUpdate(memberIdB)).thenReturn(Optional.of(memberB));
+        when(memberRepository.getReferenceById(any())).thenReturn(memberA);
+
+        authService.deleteAccount(memberIdA);
+        authService.deleteAccount(memberIdB);
+
+        assertThat(memberA.getEmail()).isNotEqualTo(memberB.getEmail());
+    }
+
+    @Test
+    void deleteAccount_alreadyDeletedOrNonExistentMember_throwsResourceNotFoundException() {
+        UUID memberId = UUID.randomUUID();
+        when(memberRepository.findByIdAndDeletedAtIsNullForUpdate(memberId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> authService.deleteAccount(memberId))
+            .isInstanceOf(ResourceNotFoundException.class);
+
+        verify(subscriptionService, never()).cancelImmediatelyForAccountDeletion(any());
+        verify(memberRepository, never()).save(any());
+        verify(auditLogRepository, never()).save(any());
+    }
+
+    // The internal Stripe-calling behavior (active vs. none vs. already
+    // cancelled) is SubscriptionServiceTest's own responsibility - this only
+    // proves AuthService always delegates to it, unconditionally, before
+    // anonymizing.
+    @Test
+    void deleteAccount_alwaysDelegatesSubscriptionCancellationToSubscriptionService() {
+        UUID memberId = UUID.randomUUID();
+        Member member = deletableMember(memberId);
+        when(memberRepository.findByIdAndDeletedAtIsNullForUpdate(memberId)).thenReturn(Optional.of(member));
+        when(memberRepository.getReferenceById(memberId)).thenReturn(member);
+
+        authService.deleteAccount(memberId);
+
+        verify(subscriptionService).cancelImmediatelyForAccountDeletion(memberId);
+    }
+
+    @Test
+    void deleteAccount_whenSubscriptionCancellationFails_rollsBackWithoutAnonymizingOrLoggingAnything() {
+        UUID memberId = UUID.randomUUID();
+        Member member = deletableMember(memberId);
+        when(memberRepository.findByIdAndDeletedAtIsNullForUpdate(memberId)).thenReturn(Optional.of(member));
+        org.mockito.Mockito.doThrow(new ConflictException("Unable to cancel subscription: Stripe unreachable"))
+            .when(subscriptionService).cancelImmediatelyForAccountDeletion(memberId);
+
+        assertThatThrownBy(() -> authService.deleteAccount(memberId))
+            .isInstanceOf(ConflictException.class);
+
+        assertThat(member.getEmail()).isEqualTo("ada@example.com");
+        assertThat(member.getDeletedAt()).isNull();
+        verify(memberRepository, never()).save(any());
+        verify(auditLogRepository, never()).save(any());
     }
 }

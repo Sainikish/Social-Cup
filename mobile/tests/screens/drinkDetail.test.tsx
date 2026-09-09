@@ -50,6 +50,7 @@ function authAs(user: MemberDto | null) {
     login: jest.fn(),
     register: jest.fn(),
     logout: jest.fn(),
+    deleteAccount: jest.fn(),
     initializeAuth: jest.fn(),
   });
 }

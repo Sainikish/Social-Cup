@@ -12,6 +12,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -54,5 +55,13 @@ public class AuthController {
         UUID memberId = CurrentUserResolver.requireMemberId(authentication);
         MemberDto member = authService.getCurrentMember(memberId);
         return ResponseEntity.ok(member);
+    }
+
+    @DeleteMapping("/me")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Void> deleteAccount(Authentication authentication) {
+        UUID memberId = CurrentUserResolver.requireMemberId(authentication);
+        authService.deleteAccount(memberId);
+        return ResponseEntity.noContent().build();
     }
 }

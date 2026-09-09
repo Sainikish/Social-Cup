@@ -80,6 +80,7 @@ beforeEach(() => {
     login: jest.fn(),
     register: jest.fn(),
     logout: jest.fn(),
+    deleteAccount: jest.fn(),
     initializeAuth: jest.fn(),
   });
 });
@@ -155,6 +156,7 @@ describe('DiaryScreen', () => {
       login: jest.fn(),
       register: jest.fn(),
       logout: jest.fn(),
+      deleteAccount: jest.fn(),
       initializeAuth: jest.fn(),
     });
 
