@@ -4,9 +4,12 @@ The internal admin web app for Social Cup staff: log in with an administrator ac
 manage the platform. **Phase 1** implemented the foundation and authentication. **Phase 2**
 added Cafe Management (create, edit, status change). **Phase 3** added Drink/Menu Management
 (create, edit, status change, per-cafe display). **Phase 4** added Member Management (suspend,
-reactivate). **Phase 5** added a read-only Subscription list. **Phase 6** adds Payout
-Management (calculate on-demand reconciliation and view cafe payout history). Redemption/audit-log
-management and dashboard metrics are separate, later phases.
+reactivate). **Phase 5** added a read-only Subscription list. **Phase 6B** added Payout
+Management (calculate on-demand reconciliation and view cafe payout history). **Phase 6C**
+added a read-only, filterable, paginated Redemption list. **Phase 6D** added a read-only,
+filterable, paginated Audit Log. **Phase 6E** added read-only, server-aggregated Dashboard
+Metrics on the Dashboard itself. **Phase 6F** was backend-only integration hardening, with no
+admin-web changes.
 
 ## Admin authentication
 
@@ -170,16 +173,21 @@ Because of this:
   going forward. Before that, with status genuinely unknown, both actions are offered - the
   confirmation dialog says so explicitly, and the backend's own 409 response is the real
   enforcement point if the wrong one is chosen.
-- **Credit balance and redemption/activity history are both deferred - neither has a backend
-  API this app can safely call for an arbitrary member.** `GET /users/me/credits` is
-  self-only. No redemption-history-by-member endpoint exists at all.
+- **Credit balance is still deferred - there is no backend API this app can safely call for
+  an arbitrary member's balance.** `GET /users/me/credits` is self-only.
+- **Redemption history is not embedded on this screen**, but it is no longer unavailable: since
+  Phase 6C, `GET /admin/redemptions?memberId={id}` (the Redemption Management screen's own
+  `memberId` filter - see below) shows exactly that, across all cafes. This app does not embed
+  it here to avoid duplicating that screen's own filter/pagination logic - open Redemption
+  Management and filter by this member's ID instead.
 - The suspend/reactivate confirmation dialog shows the member ID, the requested action, and the
   last known status (or "Unknown" when none is available) - never assumes success before the
   backend responds, and a failed request leaves the displayed state completely unchanged.
 
 No fake or mock member data is used anywhere in this app. Member search, member listing,
-pagination/filtering of members, credit-balance display, and redemption-history display are
-all explicitly deferred pending a backend API - see above.
+pagination/filtering of members, and credit-balance display are all explicitly deferred
+pending a backend API - see above. Redemption history is available, just on its own screen
+(Redemption Management, below) rather than embedded here.
 
 ## Subscription Management (Phase 5)
 
@@ -231,7 +239,7 @@ badge always reflects the backend's own `status` field - it is never inferred fr
 No fake or mock subscription data, pagination, search, filtering, or mutation of any kind is
 used anywhere in this app.
 
-## Payout Management (Phase 6 / 6B)
+## Payout Management (Phase 6B)
 
 Entry points: a "Manage Payouts" button on Cafe Detail (`/cafes/:id`), leading to the
 cafe-scoped `/cafes/:cafeId/payouts` screen (calculate a payout, view that cafe's history), and
@@ -293,6 +301,83 @@ payout.
   409 like any other error, since the backend is the sole source of truth for whether a
   duplicate exists.
 
+## Redemption Management (Phase 6C)
+
+Entry point: a "Manage Redemptions" button on the Dashboard, leading to `/redemptions` - a
+single, read-only, cross-cafe list. Requires an authenticated ADMIN session via the same
+`ProtectedRoute` Phase 1 established.
+
+### Endpoints consumed
+
+| Purpose | Endpoint | Notes |
+| --- | --- | --- |
+| List redemptions across every cafe | `GET /admin/redemptions` | Admin-only, paginated (`PageResponse`); optional filters `cafeId`, `memberId`, `drinkId`, `from`, `to`, plus `page`/`size`/`sort` |
+
+### Fields displayed
+
+`redemptionId`, `memberEmail` (linked to that member's own `/members/{memberId}` detail
+screen), `cafeName` (linked to `/cafes/{cafeId}`), `drinkName` (linked to `/drinks/{drinkId}`),
+`creditsDeducted`, `payoutRate`, and `createdAt` - every value exactly as the backend returns
+it; sorting defaults to `createdAt,desc` (newest first) and no total/aggregate is ever computed
+client-side from the listed rows.
+
+### Backend limitations (by design, not a bug)
+
+- **Read-only.** There is no edit, delete, or refund endpoint for a redemption anywhere on the
+  backend, and this app adds no such action.
+- **Filtering, sorting, and pagination are exactly what the backend contract supports** -
+  `actorId`/`entityType`-style free-form search is not available here since the backend has no
+  such parameter on this endpoint.
+- Uses the same shared `Pagination` component (`src/components/Pagination`) introduced in this
+  phase - the first paginated admin-web list screen; reused as-is by Audit Log below.
+
+## Audit Log Management (Phase 6D)
+
+Entry point: a "View Audit Log" button on the Dashboard, leading to `/audit-log` - a single,
+read-only, filterable list of administrative actions. Requires an authenticated ADMIN session
+via the same `ProtectedRoute` Phase 1 established.
+
+### Endpoints consumed
+
+| Purpose | Endpoint | Notes |
+| --- | --- | --- |
+| List audit log entries | `GET /admin/audit-log` | Admin-only, paginated (`PageResponse`); optional filters `actorId`, `entityType`, `entityId`, `from`, `to`, plus `page`/`size`/`sort` |
+
+### Fields displayed
+
+`id`, the acting member (`actorEmail` linked to `/members/{actorId}` - both are `null`, shown
+as "—", when the acting member has since been deleted; never fabricated), `action`,
+`entityType`, `entityId`, and `oldValues`/`newValues` (raw JSON text, rendered **verbatim** -
+never parsed, reformatted, or interpreted), and `createdAt`. Sorting defaults to
+`createdAt,desc`.
+
+### Backend limitations (by design, not a bug)
+
+- **Read-only.** `AdminMemberService`'s existing suspend/reactivate flow remains the only
+  writer of audit log rows anywhere in the system; this screen adds no write path.
+- Uses the same shared `Pagination` component as Redemption Management above.
+
+## Dashboard Metrics (Phase 6E)
+
+Shown directly on the Dashboard (`/dashboard`) itself, not a separate route - a "Dashboard
+Metrics" card below the existing navigation buttons.
+
+### Endpoints consumed
+
+| Purpose | Endpoint | Notes |
+| --- | --- | --- |
+| Get summary metrics | `GET /admin/dashboard/metrics` | Admin-only, no query parameters, returns a single flat object (not paginated) |
+
+### Fields displayed
+
+`totalMembers`, `totalActiveCafes`, `totalActiveDrinks`, `totalRedemptions`,
+`totalCreditsRedeemed`, `totalPayoutAmountOwed`, `totalPayoutAmountPaid` - every value is a
+server-side aggregate (`COUNT`/`SUM`) computed by the backend; this app never recalculates or
+re-derives any of them. `.toFixed(2)` on the two payout amounts is purely a currency **display**
+format, not a calculation. Loading/error states are handled the same way as every other query
+in this app; an all-zero response is rendered honestly (every field shown as `0`/`$0.00`)
+rather than hidden or treated as an error.
+
 ## Prerequisites
 
 - Node.js 20+ and npm
@@ -343,7 +428,8 @@ shell instead of a phone-first scanner flow.
 src/
 ├── api/          # shared Axios client, auth-expiry pub/sub, shared QueryClient
 ├── auth/         # session context, sessionStorage, admin login/refresh calls
-├── components/   # shared UI primitives (Button, Input, Card, LoadingState, ErrorState)
+├── components/   # shared UI primitives (Button, Input, Card, LoadingState, ErrorState,
+│                 # Pagination - introduced in Phase 6C, reused by Phase 6D)
 ├── config/       # env.ts
 ├── features/
 │   ├── cafes/    # cafe API calls, types, query keys, hooks, form helpers, CafeForm/
@@ -356,11 +442,17 @@ src/
 │   │             # endpoint exists), types, query keys, hooks, MemberActionDialog (Phase 4)
 │   ├── subscriptions/ # a single read-only list call, types, query key, hook (Phase 5) -
 │   │             # no mutation, no per-subscription detail
-│   └── payouts/  # cafe payout API calls, calculation mutation, query keys, hooks (Phase 6)
+│   ├── payouts/  # cafe payout API calls, calculation mutation, query keys, hooks (Phase 6B)
+│   ├── redemptions/ # paginated/filtered read-only list call, types, query keys, hooks
+│   │             # (Phase 6C) - no mutation, no per-redemption detail
+│   ├── auditLog/ # paginated/filtered read-only list call, types, query keys, hooks
+│   │             # (Phase 6D) - no mutation
+│   └── dashboardMetrics/ # a single read call, types, query key, hook (Phase 6E) - no
+│                 # mutation, no filters/params
 ├── routes/       # AppRouter, ProtectedRoute, PublicRoute
 ├── screens/      # Login, Dashboard, CafeList, CafeCreate, CafeDetail, CafePayouts,
 │                 # DrinkList, DrinkCreate, DrinkDetail, MemberLookup, MemberDetail,
-│                 # SubscriptionList
+│                 # SubscriptionList, PayoutList, RedemptionList, AuditLogList
 ├── types/        # shared ApiError/PageResponse shapes
 └── utils/        # errors.ts (safe error-message mapping, AdminAccessRequiredError,
                   # extractFieldErrors)
