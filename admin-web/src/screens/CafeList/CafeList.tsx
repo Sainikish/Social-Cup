@@ -76,10 +76,15 @@ export function CafeList() {
           {searchQuery.data.content.map((cafe) => (
             <li key={cafe.id}>
               <Link to={`/cafes/${cafe.id}`} className={styles.resultLink}>
-                <span className={styles.resultName}>{cafe.name}</span>
-                <span className={styles.resultMeta}>
-                  {cafe.address}
-                  {cafe.neighbourhood ? ` · ${cafe.neighbourhood}` : ''}
+                {cafe.primaryPhotoUrl ? (
+                  <img src={cafe.primaryPhotoUrl} alt={cafe.name} className={styles.thumbnail} />
+                ) : null}
+                <span className={styles.resultText}>
+                  <span className={styles.resultName}>{cafe.name}</span>
+                  <span className={styles.resultMeta}>
+                    {cafe.address}
+                    {cafe.neighbourhood ? ` · ${cafe.neighbourhood}` : ''}
+                  </span>
                 </span>
               </Link>
             </li>

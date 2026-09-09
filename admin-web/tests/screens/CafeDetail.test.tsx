@@ -315,6 +315,32 @@ describe('CafeDetail - Phase 3 drinks integration', () => {
     expect(screen.getByText('Iced Latte', { exact: false })).toBeInTheDocument();
   });
 
+  it('renders the primary photo when photos are present, and none when the list is empty', async () => {
+    mockGetPublicCafeById.mockResolvedValue({
+      ...PUBLIC_DETAIL,
+      photos: [
+        { id: 'photo-1', photoUrl: 'https://example.test/secondary.jpg', caption: null, displayOrder: 1, isPrimary: false },
+        { id: 'photo-2', photoUrl: 'https://example.test/primary.jpg', caption: 'Storefront', displayOrder: 0, isPrimary: true },
+      ],
+    });
+    renderCold();
+
+    await screen.findByText('Daily Grind', { selector: 'h1' });
+
+    const images = screen.getAllByRole('img');
+    expect(images).toHaveLength(1);
+    expect(images[0]).toHaveAttribute('src', 'https://example.test/primary.jpg');
+  });
+
+  it('shows no photo when the cafe has none, rather than a fabricated placeholder', async () => {
+    mockGetPublicCafeById.mockResolvedValue(PUBLIC_DETAIL);
+    renderCold();
+
+    await screen.findByText('Daily Grind', { selector: 'h1' });
+
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
+  });
+
   it('still renders cafe create/edit/status/search entry points unaffected by the new Drinks section', async () => {
     mockGetPublicCafeById.mockResolvedValue(PUBLIC_DETAIL);
     renderCold();

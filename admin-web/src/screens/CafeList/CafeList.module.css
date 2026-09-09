@@ -76,15 +76,29 @@
 
 .resultLink {
   display: flex;
-  flex-direction: column;
-  gap: var(--spacing-xs);
+  flex-direction: row;
+  align-items: center;
+  gap: var(--spacing-md);
   padding: var(--spacing-md);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-surface);
   text-decoration: none;
   min-height: var(--touch-target-min);
-  justify-content: center;
+}
+
+.thumbnail {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-md);
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.resultText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
 }
 
 .resultName {

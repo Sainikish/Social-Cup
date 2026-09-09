@@ -76,6 +76,7 @@ export function CafeDetail() {
     return <ErrorState message="This cafe could not be found." />;
   }
 
+  const primaryPhoto = detail.photos.find((photo) => photo.isPrimary) ?? detail.photos[0];
   const payoutRateKnown = Boolean(latestAdminDetail);
   const initialValues: CafeFormValues = {
     ...cafeFormValuesFromDetail(detail),
@@ -164,6 +165,14 @@ export function CafeDetail() {
         </span>
       </header>
 
+      {primaryPhoto ? (
+        <img
+          src={primaryPhoto.photoUrl}
+          alt={primaryPhoto.caption ?? detail.name}
+          className={styles.photo}
+        />
+      ) : null}
+
       <section className={styles.section}>
         <div className={styles.drinksSectionHeader}>
           <h2 className={styles.sectionTitle}>Drinks</h2>
@@ -187,9 +196,14 @@ export function CafeDetail() {
         ) : (
           <ul className={styles.drinkList}>
             {detail.drinks.map((drink) => (
-              <li key={drink.id}>
-                {drink.name}
-                {drink.signature ? ' (Signature)' : ''}
+              <li key={drink.id} className={styles.drinkListItem}>
+                {drink.photoUrl ? (
+                  <img src={drink.photoUrl} alt={drink.name} className={styles.drinkThumbnail} />
+                ) : null}
+                <span>
+                  {drink.name}
+                  {drink.signature ? ' (Signature)' : ''}
+                </span>
               </li>
             ))}
           </ul>

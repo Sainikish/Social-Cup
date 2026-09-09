@@ -23,6 +23,14 @@ function formatPeriodDate(value: string | null): string {
   return new Date(year, month - 1, day).toLocaleDateString();
 }
 
+// PayoutResponse only carries the cafe's raw UUID (see the class-level note
+// below) - shown in full via `title` for anyone who needs to copy it, but
+// truncated in the cell itself so a 36-character id doesn't force the whole
+// table into horizontal scroll on an ordinary window width.
+function shortId(id: string): string {
+  return id.length > 8 ? `${id.slice(0, 8)}…` : id;
+}
+
 // Cross-cafe payout list, backed by GET /admin/payouts - a flat, unpaginated
 // array with no query parameters. This screen reflects that honestly: no
 // pagination controls, no search/filter box. Each PayoutResponse only
@@ -138,7 +146,9 @@ export function PayoutList() {
               {payoutsQuery.data.map((payout) => (
                 <tr key={payout.id}>
                   <td>
-                    <Link to={`/cafes/${payout.cafeId}`}>{payout.cafeId}</Link>
+                    <Link to={`/cafes/${payout.cafeId}`} title={payout.cafeId}>
+                      {shortId(payout.cafeId)}
+                    </Link>
                   </td>
                   <td>
                     {formatPeriodDate(payout.periodStart)} – {formatPeriodDate(payout.periodEnd)}

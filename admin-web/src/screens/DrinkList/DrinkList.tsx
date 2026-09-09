@@ -73,14 +73,17 @@ export function DrinkList() {
                 state={{ drink, cafeName }}
                 className={styles.resultLink}
               >
-                <span className={styles.resultNameRow}>
-                  <span className={styles.resultName}>{drink.name}</span>
-                  {drink.signature ? <span className={styles.signatureBadge}>Signature</span> : null}
-                </span>
-                <span className={styles.resultMeta}>
-                  {drink.type ? `${drink.type} · ` : ''}
-                  {drink.retailPrice != null ? `$${drink.retailPrice.toFixed(2)}` : 'No retail price'} ·{' '}
-                  {drink.creditPrice} credits
+                {drink.photoUrl ? <img src={drink.photoUrl} alt={drink.name} className={styles.thumbnail} /> : null}
+                <span className={styles.resultText}>
+                  <span className={styles.resultNameRow}>
+                    <span className={styles.resultName}>{drink.name}</span>
+                    {drink.signature ? <span className={styles.signatureBadge}>Signature</span> : null}
+                  </span>
+                  <span className={styles.resultMeta}>
+                    {drink.type ? `${drink.type} · ` : ''}
+                    {drink.retailPrice != null ? `$${drink.retailPrice.toFixed(2)}` : 'No retail price'} ·{' '}
+                    {drink.creditPrice} credits
+                  </span>
                 </span>
               </Link>
             </li>

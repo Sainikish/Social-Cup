@@ -166,6 +166,8 @@ export function DrinkDetail() {
         </span>
       </header>
 
+      {drink.photoUrl ? <img src={drink.photoUrl} alt={drink.name} className={styles.photo} /> : null}
+
       <section className={styles.section}>
         <h2 className={styles.sectionTitle}>Status</h2>
         <div className={styles.statusActions}>

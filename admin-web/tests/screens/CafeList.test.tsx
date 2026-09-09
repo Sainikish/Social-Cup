@@ -68,6 +68,19 @@ describe('CafeList', () => {
     expect(mockSearchCafes).toHaveBeenCalledWith({ q: 'grind' });
   });
 
+  it('renders a thumbnail when primaryPhotoUrl is present, and none when it is null', async () => {
+    const withPhoto: CafeSummaryResponse = { ...SAMPLE_CAFE, id: 'cafe-2', name: 'Sunrise Roasters', primaryPhotoUrl: 'https://example.test/cafe.jpg' };
+    mockSearchCafes.mockResolvedValue(page([SAMPLE_CAFE, withPhoto]));
+    renderScreen();
+
+    fireEvent.change(screen.getByLabelText('Search active cafes by name'), { target: { value: 'coffee' } });
+    fireEvent.click(screen.getByText('Search'));
+
+    await screen.findByText('Sunrise Roasters');
+    expect(screen.getAllByRole('img')).toHaveLength(1);
+    expect(screen.getByRole('img')).toHaveAttribute('src', 'https://example.test/cafe.jpg');
+  });
+
   it('shows an empty-results message for a search with no matches', async () => {
     mockSearchCafes.mockResolvedValue(page([]));
     renderScreen();

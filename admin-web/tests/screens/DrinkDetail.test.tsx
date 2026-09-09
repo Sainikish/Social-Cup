@@ -102,6 +102,22 @@ describe('DrinkDetail - cold load (public endpoint only)', () => {
     expect(await screen.findByText('Iced Latte', { selector: 'h1' })).toBeInTheDocument();
   });
 
+  it('renders the photo when photoUrl is present, and none when it is null', async () => {
+    mockGetPublicDrinkById.mockResolvedValue({ ...DRINK, photoUrl: 'https://example.test/drink.jpg' });
+    renderCold();
+
+    const image = await screen.findByRole('img');
+    expect(image).toHaveAttribute('src', 'https://example.test/drink.jpg');
+  });
+
+  it('shows no photo when the drink has none, rather than a fabricated placeholder', async () => {
+    mockGetPublicDrinkById.mockResolvedValue(DRINK);
+    renderCold();
+
+    await screen.findByText('Iced Latte', { selector: 'h1' });
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
+  });
+
   it('shows an error state with retry when the public fetch fails', async () => {
     mockGetPublicDrinkById.mockRejectedValue({
       isAxiosError: true,

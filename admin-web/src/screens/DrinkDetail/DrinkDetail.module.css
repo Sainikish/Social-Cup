@@ -26,6 +26,13 @@
   gap: var(--spacing-md);
 }
 
+.photo {
+  width: 100%;
+  max-height: 320px;
+  object-fit: cover;
+  border-radius: var(--radius-md);
+}
+
 .title {
   font-size: var(--font-size-xl);
   font-weight: 700;

@@ -68,6 +68,16 @@ describe('DrinkList', () => {
     expect(mockGetDrinksByCafe).toHaveBeenCalledWith({ cafeId: 'cafe-1' });
   });
 
+  it('renders a thumbnail when photoUrl is present, and none when it is null', async () => {
+    const withPhoto: DrinkResponse = { ...SAMPLE_DRINK, id: 'drink-2', name: 'Cold Brew', photoUrl: 'https://example.test/drink.jpg' };
+    mockGetDrinksByCafe.mockResolvedValue(page([SAMPLE_DRINK, withPhoto]));
+    renderScreen();
+
+    await screen.findByText('Cold Brew');
+    expect(screen.getAllByRole('img')).toHaveLength(1);
+    expect(screen.getByRole('img')).toHaveAttribute('src', 'https://example.test/drink.jpg');
+  });
+
   it('shows an error state with retry on a failed fetch', async () => {
     mockGetDrinksByCafe.mockRejectedValue({
       isAxiosError: true,
