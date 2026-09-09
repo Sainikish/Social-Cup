@@ -1,8 +1,16 @@
 package com.socialcup.config;
 
+import com.socialcup.admin.repository.AuditLogRepository;
+import com.socialcup.barista.repository.CafePinRepository;
 import com.socialcup.cafe.repository.CafeRepository;
+import com.socialcup.credit.repository.CreditLedgerRepository;
 import com.socialcup.drink.repository.DrinkRepository;
+import com.socialcup.payout.repository.PayoutRepository;
 import com.socialcup.rating.repository.RatingRepository;
+import com.socialcup.redemption.repository.RedemptionCodeRepository;
+import com.socialcup.redemption.repository.RedemptionRepository;
+import com.socialcup.subscription.repository.ProcessedWebhookEventRepository;
+import com.socialcup.subscription.repository.SubscriptionRepository;
 import com.socialcup.user.repository.MemberRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,8 +26,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-// No JPA entities exist yet, so this test excludes datasource/JPA/Flyway
-// autoconfiguration rather than requiring a live database to verify rate limiting.
+// Excludes datasource/JPA/Flyway autoconfiguration rather than requiring a
+// live database to verify rate limiting. Phase 6F: this mock list had
+// drifted stale since Phase C (RedemptionCode) - every @Service in the full
+// app context is eagerly instantiated here, so it needs a @MockitoBean for
+// every JpaRepository any of them depends on, not just the four still
+// listed below from an earlier phase. Mirrors
+// BaristaSecurityIntegrationTest's own (already correct, already complete)
+// mock list exactly.
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = {
@@ -50,6 +64,30 @@ class RateLimitIntegrationTest {
 
     @MockitoBean
     private RatingRepository ratingRepository;
+
+    @MockitoBean
+    private CreditLedgerRepository creditLedgerRepository;
+
+    @MockitoBean
+    private CafePinRepository cafePinRepository;
+
+    @MockitoBean
+    private RedemptionCodeRepository redemptionCodeRepository;
+
+    @MockitoBean
+    private RedemptionRepository redemptionRepository;
+
+    @MockitoBean
+    private SubscriptionRepository subscriptionRepository;
+
+    @MockitoBean
+    private ProcessedWebhookEventRepository processedWebhookEventRepository;
+
+    @MockitoBean
+    private AuditLogRepository auditLogRepository;
+
+    @MockitoBean
+    private PayoutRepository payoutRepository;
 
     @Test
     void requestsBeyondTheLimitReceive429() throws Exception {
