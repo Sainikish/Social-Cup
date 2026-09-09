@@ -2,11 +2,12 @@
 // code, never a cafeId (the backend derives the acting cafe exclusively
 // from the authenticated BARISTA JWT - see CurrentCafeResolver).
 //
-// TODO: Backup-code redemption requires an explicit backend decision.
-// Current backend redemption accepts the primary redemption code only -
-// RedemptionCodeRepository has no lookup by backup_code at all (verified
-// against source). `code` here is always the primary code, whether it came
-// from the QR scanner or manual entry (see README.md "Known limitation").
+// `code` accepts either the primary redemption code or the short 6-digit
+// backup code shown by the mobile app - RedemptionService.redeem() tries
+// the primary code first, then falls back to a cafe-scoped backup-code
+// lookup (see README.md "Backup-code redemption" - no longer a limitation,
+// this app requires no change to support it: whatever the QR scanner reads
+// or the barista types manually is sent here unchanged either way).
 export interface RedeemCodeRequest {
   code: string;
 }

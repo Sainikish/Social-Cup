@@ -14,7 +14,7 @@ have the camera permission request fail immediately, with this app falling back 
 "Camera unavailable" state (manual code entry always remains available regardless).
 This means **any real deployment of this app must be served over HTTPS** for the
 scanner to function; see `src/hooks/useQrScanner.ts`. No deployment configuration is
-set up yet (see "Known limitation" below and the project's own deployment planning).
+set up yet.
 
 ## Prerequisites
 
@@ -77,23 +77,21 @@ src/
 └── types/        # shared ApiError/PageResponse shapes
 ```
 
-## Known limitation - backup-code redemption
+## Backup-code redemption
 
-> **TODO:** Backup-code redemption requires an explicit backend decision.
-> Current backend redemption accepts the primary redemption code.
+`POST /barista/redeem` now accepts either the member's primary redemption code or their
+short 6-digit backup code (the manual-entry fallback shown by the mobile app's own
+redemption screen). `RedemptionService.redeem()` tries the primary code first, then falls
+back to a lookup scoped to this cafe and to currently-live codes only - a stale/consumed
+backup code from an earlier, unrelated redemption can never be matched, and an
+(astronomically rare, but possible) collision between two simultaneously-live codes at the
+same cafe is refused rather than guessed at.
 
-During backend inspection it was confirmed that `POST /barista/redeem` looks up a
-redemption code exclusively by its primary `code_value` column
-(`RedemptionCodeRepository.findByCodeValueForUpdate`). There is no lookup path anywhere
-in the backend for the member-facing `backup_code` (the short manual-entry fallback
-shown by the mobile app's own redemption screen). Submitting a backup code here today
-would simply be rejected as "not found," indistinguishable from a genuinely invalid
-code.
-
-This app therefore only ever sends the primary code - both from the QR scanner and from
-manual entry - and makes no claim anywhere in its UI that backup-code redemption is
-supported. No backend lookup for `backup_code` has been invented here; that remains a
-product/backend decision for later, out of scope for this application.
+This app required **no change** to support this: whatever the QR scanner reads or the
+barista types into the manual-entry field is sent to `POST /barista/redeem` exactly as
+before, for either code type. There is nothing in this app's own UI or code that
+distinguishes a primary code from a backup code - that distinction is resolved entirely
+server-side.
 
 ## Testing
 
