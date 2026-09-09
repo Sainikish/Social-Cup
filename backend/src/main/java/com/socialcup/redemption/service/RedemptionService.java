@@ -26,6 +26,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 // Phase D: the atomic redemption transaction. A previously-issued
@@ -63,6 +65,7 @@ public class RedemptionService {
         // redemption of the SAME code blocks on this exact line until this
         // transaction commits or rolls back.
         RedemptionCode redemptionCode = redemptionCodeRepository.findByCodeValueForUpdate(codeValue)
+            .or(() -> findLiveByBackupCode(cafeId, codeValue))
             .orElseThrow(() -> new ResourceNotFoundException("Redemption code not found"));
 
         // A code belonging to another cafe is treated identically to an unknown
@@ -114,6 +117,28 @@ public class RedemptionService {
         redemptionCodeRepository.save(redemptionCode);
 
         return RedemptionResponse.fromEntity(savedRedemption);
+    }
+
+    // Phase 6G: matches barista-web/mobile's own "manual entry" fallback - a
+    // barista may be handed either the long primary code or the short
+    // 6-digit backup code, and redeem() above makes no distinction between
+    // them beyond this lookup, which only runs at all when the primary
+    // lookup already found nothing (Optional.or is lazy - see redeem()).
+    // Scoped to cafeId and "live" at the query level (see the repository
+    // method's own note) rather than post-filtered, so a collision with a
+    // stale/consumed row from an earlier, unrelated redemption can never
+    // occur. If more than one currently-live code at this cafe happens to
+    // share the same backup code - the 6-digit space has no uniqueness
+    // guarantee, so this is possible even if astronomically unlikely - this
+    // refuses to guess and reports not-found, exactly like every other
+    // ambiguous case in redeem() (e.g. a code belonging to another cafe).
+    private Optional<RedemptionCode> findLiveByBackupCode(UUID cafeId, String backupCode) {
+        List<RedemptionCode> matches = redemptionCodeRepository.findLiveByBackupCodeAndCafeIdForUpdate(
+            backupCode, cafeId, Instant.now());
+        if (matches.size() != 1) {
+            return Optional.empty();
+        }
+        return Optional.of(matches.get(0));
     }
 
     // Phase 6C: read-only admin reporting over the same append-only

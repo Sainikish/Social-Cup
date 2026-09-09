@@ -2,6 +2,7 @@ package com.socialcup.redemption.service;
 
 import com.socialcup.cafe.entity.Cafe;
 import com.socialcup.cafe.repository.CafeRepository;
+import com.socialcup.common.exception.ResourceNotFoundException;
 import com.socialcup.credit.entity.CreditLedger;
 import com.socialcup.credit.entity.CreditLedgerType;
 import com.socialcup.credit.repository.CreditLedgerRepository;
@@ -32,6 +33,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 // Real PostgreSQL via Testcontainers, same convention as
 // RedemptionCodeIntegrationTest/CreditServiceConcurrencyIntegrationTest - proves
@@ -160,5 +162,107 @@ class RedemptionIntegrationTest {
 
         Redemption reloaded = redemptionRepository.findById(redemption.getId()).orElseThrow();
         assertThat(reloaded.getPayoutRate()).isEqualByComparingTo("0.8000");
+    }
+
+    // ---- Backup-code redemption (Phase 6G) ----
+
+    private void forceBackupCode(String primaryCode, String backupCode) {
+        RedemptionCode persisted = redemptionCodeRepository.findByCodeValue(primaryCode).orElseThrow();
+        persisted.setBackupCode(backupCode);
+        redemptionCodeRepository.saveAndFlush(persisted);
+    }
+
+    @Test
+    void redeem_viaBackupCode_endToEnd_succeedsExactlyLikeThePrimaryCode() {
+        Member member = seedMemberWithCredits(30);
+        Cafe cafe = seedCafe();
+        Drink drink = seedDrink(cafe, 4);
+        RedemptionCodeResponse generated = redemptionCodeService.generateCode(
+            member.getId(), new CreateRedemptionCodeRequest(drink.getId()));
+
+        RedemptionResponse response = redemptionService.redeem(cafe.getId(), generated.backupCode());
+
+        assertThat(response.drinkId()).isEqualTo(drink.getId());
+        assertThat(response.creditsDeducted()).isEqualTo(4);
+        RedemptionCode persistedCode = redemptionCodeRepository.findByCodeValue(generated.code()).orElseThrow();
+        assertThat(persistedCode.isRedeemed()).isTrue();
+    }
+
+    @Test
+    void redeem_viaBackupCode_doesNotMatchAnotherCafesLiveCodeSharingTheSameBackupValue() {
+        Member memberA = seedMemberWithCredits(30);
+        Member memberB = seedMemberWithCredits(30);
+        Cafe cafeA = seedCafe();
+        Cafe cafeB = seedCafe();
+        Drink drinkA = seedDrink(cafeA, 4);
+        Drink drinkB = seedDrink(cafeB, 3);
+
+        RedemptionCodeResponse generatedA = redemptionCodeService.generateCode(
+            memberA.getId(), new CreateRedemptionCodeRequest(drinkA.getId()));
+        RedemptionCodeResponse generatedB = redemptionCodeService.generateCode(
+            memberB.getId(), new CreateRedemptionCodeRequest(drinkB.getId()));
+
+        // Force both live codes to share the exact same 6-digit backup value -
+        // the whole point of this test, since real generation makes this
+        // exceedingly unlikely to happen naturally.
+        forceBackupCode(generatedA.code(), "555555");
+        forceBackupCode(generatedB.code(), "555555");
+
+        RedemptionResponse response = redemptionService.redeem(cafeA.getId(), "555555");
+
+        assertThat(response.drinkId()).isEqualTo(drinkA.getId());
+        RedemptionCode redeemedA = redemptionCodeRepository.findByCodeValue(generatedA.code()).orElseThrow();
+        assertThat(redeemedA.isRedeemed()).isTrue();
+        // Cafe B's identically-coded live redemption is completely unaffected -
+        // the query scoped to cafeA never even considered it.
+        RedemptionCode untouchedB = redemptionCodeRepository.findByCodeValue(generatedB.code()).orElseThrow();
+        assertThat(untouchedB.isRedeemed()).isFalse();
+    }
+
+    @Test
+    void redeem_viaBackupCode_ambiguousCollisionAtTheSameCafe_refusesToGuess_throwsResourceNotFound() {
+        Member memberA = seedMemberWithCredits(30);
+        Member memberB = seedMemberWithCredits(30);
+        Cafe cafe = seedCafe();
+        Drink drink = seedDrink(cafe, 4);
+
+        RedemptionCodeResponse generatedA = redemptionCodeService.generateCode(
+            memberA.getId(), new CreateRedemptionCodeRequest(drink.getId()));
+        RedemptionCodeResponse generatedB = redemptionCodeService.generateCode(
+            memberB.getId(), new CreateRedemptionCodeRequest(drink.getId()));
+
+        forceBackupCode(generatedA.code(), "555555");
+        forceBackupCode(generatedB.code(), "555555");
+
+        assertThatThrownBy(() -> redemptionService.redeem(cafe.getId(), "555555"))
+            .isInstanceOf(ResourceNotFoundException.class);
+
+        RedemptionCode untouchedA = redemptionCodeRepository.findByCodeValue(generatedA.code()).orElseThrow();
+        RedemptionCode untouchedB = redemptionCodeRepository.findByCodeValue(generatedB.code()).orElseThrow();
+        assertThat(untouchedA.isRedeemed()).isFalse();
+        assertThat(untouchedB.isRedeemed()).isFalse();
+    }
+
+    @Test
+    void redeem_viaBackupCode_doesNotMatchAStaleAlreadyRedeemedCodeSharingTheSameBackupValue() {
+        Member memberA = seedMemberWithCredits(30);
+        Member memberB = seedMemberWithCredits(30);
+        Cafe cafe = seedCafe();
+        Drink drink = seedDrink(cafe, 4);
+
+        RedemptionCodeResponse generatedA = redemptionCodeService.generateCode(
+            memberA.getId(), new CreateRedemptionCodeRequest(drink.getId()));
+        forceBackupCode(generatedA.code(), "555555");
+        redemptionService.redeem(cafe.getId(), generatedA.code());
+
+        // A brand-new, unrelated live code happens to draw the same backup
+        // value the now-consumed code above used.
+        RedemptionCodeResponse generatedB = redemptionCodeService.generateCode(
+            memberB.getId(), new CreateRedemptionCodeRequest(drink.getId()));
+        forceBackupCode(generatedB.code(), "555555");
+
+        RedemptionResponse response = redemptionService.redeem(cafe.getId(), "555555");
+
+        assertThat(response.memberFirstName()).isEqualTo(memberB.getFirstName());
     }
 }

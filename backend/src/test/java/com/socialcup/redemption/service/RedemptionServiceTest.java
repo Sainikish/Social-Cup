@@ -308,6 +308,70 @@ class RedemptionServiceTest {
         verify(creditService, never()).deductForRedemption(any(), anyInt(), any());
     }
 
+    // ---- Backup-code redemption ----
+
+    @Test
+    void redeem_viaBackupCode_success_whenPrimaryLookupFindsNothing() {
+        Member member = newMember(MEMBER_ID);
+        Cafe cafe = newActiveCafe(CAFE_ID);
+        Drink drink = newActiveDrink(DRINK_ID, cafe, 4);
+        RedemptionCode code = newLiveCode(member, cafe, drink);
+        when(redemptionCodeRepository.findByCodeValueForUpdate("042917")).thenReturn(Optional.empty());
+        when(redemptionCodeRepository.findLiveByBackupCodeAndCafeIdForUpdate(eq("042917"), eq(CAFE_ID), any()))
+            .thenReturn(java.util.List.of(code));
+        when(drinkRepository.findByIdAndArchivedAtIsNull(DRINK_ID)).thenReturn(Optional.of(drink));
+        when(cafeRepository.findByIdAndArchivedAtIsNull(CAFE_ID)).thenReturn(Optional.of(cafe));
+        when(creditService.deductForRedemption(eq(MEMBER_ID), eq(4), eq(code.getId().toString())))
+            .thenReturn(new CreditLedger());
+        when(redemptionRepository.save(any(Redemption.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(redemptionCodeRepository.save(any(RedemptionCode.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        RedemptionResponse response = redemptionService.redeem(CAFE_ID, "042917");
+
+        assertThat(response.drinkId()).isEqualTo(DRINK_ID);
+        verify(creditService).deductForRedemption(eq(MEMBER_ID), eq(4), any());
+    }
+
+    @Test
+    void redeem_backupCodeLookup_isNeverCalledWhenThePrimaryLookupAlreadyFoundAMatch() {
+        stubHappyPath(4);
+
+        redemptionService.redeem(CAFE_ID, CODE_VALUE);
+
+        verify(redemptionCodeRepository, never())
+            .findLiveByBackupCodeAndCafeIdForUpdate(any(), any(), any());
+    }
+
+    @Test
+    void redeem_backupCode_noLiveMatchAtThisCafe_throwsResourceNotFound() {
+        when(redemptionCodeRepository.findByCodeValueForUpdate("042917")).thenReturn(Optional.empty());
+        when(redemptionCodeRepository.findLiveByBackupCodeAndCafeIdForUpdate(eq("042917"), eq(CAFE_ID), any()))
+            .thenReturn(java.util.List.of());
+
+        assertThatThrownBy(() -> redemptionService.redeem(CAFE_ID, "042917"))
+            .isInstanceOf(ResourceNotFoundException.class);
+
+        verify(creditService, never()).deductForRedemption(any(), anyInt(), any());
+    }
+
+    @Test
+    void redeem_backupCode_ambiguousCollisionAcrossTwoLiveCodes_refusesToGuess_throwsResourceNotFound() {
+        Member memberA = newMember(MEMBER_ID);
+        Member memberB = newMember(UUID.randomUUID());
+        Cafe cafe = newActiveCafe(CAFE_ID);
+        Drink drink = newActiveDrink(DRINK_ID, cafe, 4);
+        RedemptionCode codeA = newLiveCode(memberA, cafe, drink);
+        RedemptionCode codeB = newLiveCode(memberB, cafe, drink);
+        when(redemptionCodeRepository.findByCodeValueForUpdate("042917")).thenReturn(Optional.empty());
+        when(redemptionCodeRepository.findLiveByBackupCodeAndCafeIdForUpdate(eq("042917"), eq(CAFE_ID), any()))
+            .thenReturn(java.util.List.of(codeA, codeB));
+
+        assertThatThrownBy(() -> redemptionService.redeem(CAFE_ID, "042917"))
+            .isInstanceOf(ResourceNotFoundException.class);
+
+        verify(creditService, never()).deductForRedemption(any(), anyInt(), any());
+    }
+
     // ---- Insufficient credits ----
 
     @Test
