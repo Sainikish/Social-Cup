@@ -14,6 +14,7 @@ export interface AuthContextValue {
   login: (credentials: LoginRequest) => Promise<void>;
   register: (details: RegisterRequest) => Promise<void>;
   logout: () => Promise<void>;
+  deleteAccount: () => Promise<void>;
   initializeAuth: () => Promise<void>;
 }
 
@@ -87,12 +88,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // The backend has no logout/revocation endpoint (see backend README
-  // "Authentication & authorization (foundation only)") - a JWT stays valid
-  // until it expires regardless of what the client does. Logout is
-  // therefore entirely local: dispose of both tokens and the app's own
-  // state. Clearing the query cache prevents one account's cached data
-  // (once real cafe/drink/rating queries exist in later phases) from
-  // leaking into whichever account logs in next on the same device.
+  // "Authentication & authorization") - a JWT stays valid until it expires
+  // regardless of what the client does. Logout is therefore entirely local:
+  // dispose of both tokens and the app's own state. Clearing the query cache
+  // prevents one account's cached data from leaking into whichever account
+  // logs in next on the same device.
   const logout = useCallback(async () => {
     await clearAuthTokens();
     queryClient.clear();
@@ -100,9 +100,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setStatus('unauthenticated');
   }, []);
 
+  // Calls the API first, then reuses logout()'s own local cleanup verbatim -
+  // if the DELETE fails, that cleanup never runs, so the caller stays
+  // authenticated and can retry (see ProfileScreen's error handling).
+  const deleteAccount = useCallback(async () => {
+    await authApi.deleteAccount();
+    await logout();
+  }, [logout]);
+
   const value = useMemo<AuthContextValue>(
-    () => ({ status, user, login, register, logout, initializeAuth }),
-    [status, user, login, register, logout, initializeAuth]
+    () => ({ status, user, login, register, logout, deleteAccount, initializeAuth }),
+    [status, user, login, register, logout, deleteAccount, initializeAuth]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

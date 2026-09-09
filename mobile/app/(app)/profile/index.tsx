@@ -1,5 +1,6 @@
 import { useRouter } from 'expo-router';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { toApiError } from '../../../src/api/client';
 import { Avatar, Button, Card } from '../../../src/components';
@@ -7,6 +8,7 @@ import { useAuth } from '../../../src/features/auth';
 import { useCreditBalanceQuery } from '../../../src/features/credits';
 import { SubscriptionStatusCard, useSubscriptionQuery } from '../../../src/features/subscription';
 import { colors, fontSize, fontWeight, spacing } from '../../../src/theme';
+import { genericErrorMessage } from '../../../src/utils/apiErrors';
 
 // Mirrors com.socialcup.user.entity.MemberStatus - ACTIVE is the normal,
 // unremarkable state (not worth calling out), so the status row only
@@ -18,12 +20,46 @@ function formatAccountStatus(status: string): string {
 }
 
 export default function ProfileScreen() {
-  const { user, logout } = useAuth();
+  const { user, logout, deleteAccount } = useAuth();
   const router = useRouter();
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | undefined>(undefined);
 
   const fullName = user ? [user.firstName, user.lastName].filter(Boolean).join(' ') : '';
   const identityLabel = fullName || user?.email || '';
   const showStatus = Boolean(user?.status) && user?.status !== 'ACTIVE';
+
+  // The API call and the local session/cache cleanup are two separate steps
+  // on purpose: if deleteAccount() (the API call) rejects, the local cleanup
+  // inside it never runs (see AuthContext.deleteAccount), so the member
+  // stays logged in here and simply sees the error below - never signed out
+  // for a deletion that didn't actually happen server-side.
+  async function handleDeleteAccount() {
+    setDeleteError(undefined);
+    setIsDeleting(true);
+    try {
+      await deleteAccount();
+    } catch (error) {
+      setDeleteError(genericErrorMessage(toApiError(error)));
+    } finally {
+      setIsDeleting(false);
+    }
+  }
+
+  function confirmDeleteAccount() {
+    Alert.alert(
+      'Delete account?',
+      'Your account will be permanently deactivated and your personal information removed. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => void handleDeleteAccount(),
+        },
+      ]
+    );
+  }
 
   const creditQuery = useCreditBalanceQuery({ enabled: Boolean(user) });
   const subscriptionQuery = useSubscriptionQuery({ enabled: Boolean(user) });
@@ -94,6 +130,22 @@ export default function ProfileScreen() {
           onPress={() => void logout()}
         />
       </View>
+
+      <View style={styles.dangerZone}>
+        {deleteError ? (
+          <Text style={styles.errorText} accessibilityRole="alert">
+            {deleteError}
+          </Text>
+        ) : null}
+        <Button
+          label="Delete Account"
+          variant="danger"
+          accessibilityLabel="Delete account"
+          loading={isDeleting}
+          disabled={isDeleting}
+          onPress={confirmDeleteAccount}
+        />
+      </View>
     </ScrollView>
   );
 }
@@ -146,5 +198,13 @@ const styles = StyleSheet.create({
   },
   actions: {
     gap: spacing.md,
+  },
+  dangerZone: {
+    marginTop: spacing.md,
+    gap: spacing.sm,
+  },
+  errorText: {
+    fontSize: fontSize.sm,
+    color: colors.danger,
   },
 });

@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen } from '@testing-library/react-native';
-import { Image } from 'react-native';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { Alert, Image } from 'react-native';
 
 import ProfileScreen from '../../app/(app)/profile/index';
 import { useAuth, type AuthContextValue } from '../../src/features/auth';
@@ -62,13 +62,18 @@ function notFoundError() {
   };
 }
 
-function authAs(user: MemberDto, logout: () => Promise<void> = jest.fn()): void {
+function authAs(
+  user: MemberDto,
+  logout: () => Promise<void> = jest.fn(),
+  deleteAccount: () => Promise<void> = jest.fn()
+): void {
   mockUseAuth.mockReturnValue({
     status: 'authenticated',
     user,
     login: jest.fn(),
     register: jest.fn(),
     logout,
+    deleteAccount,
     initializeAuth: jest.fn(),
   } satisfies AuthContextValue);
 }
@@ -224,6 +229,57 @@ describe('ProfileScreen', () => {
       fireEvent.press(screen.getByLabelText('Manage membership'));
 
       expect(mockPush).toHaveBeenCalledWith('/(app)/profile/subscription');
+    });
+  });
+
+  describe('Delete Account', () => {
+    it('does not call deleteAccount until the confirmation dialog is accepted', () => {
+      const deleteAccount = jest.fn();
+      authAs(member(), jest.fn(), deleteAccount);
+      jest.spyOn(Alert, 'alert').mockImplementation(() => {
+        // Simulates the member dismissing/choosing "Cancel" - no button
+        // callback invoked.
+      });
+
+      renderScreen();
+      fireEvent.press(screen.getByLabelText('Delete account'));
+
+      expect(deleteAccount).not.toHaveBeenCalled();
+    });
+
+    it('calls deleteAccount after the confirmation dialog is accepted', async () => {
+      const deleteAccount = jest.fn().mockResolvedValue(undefined);
+      authAs(member(), jest.fn(), deleteAccount);
+      jest.spyOn(Alert, 'alert').mockImplementation((_title, _message, buttons) => {
+        const destructive = buttons?.find((button) => button.style === 'destructive');
+        destructive?.onPress?.();
+      });
+
+      renderScreen();
+      fireEvent.press(screen.getByLabelText('Delete account'));
+
+      await waitFor(() => expect(deleteAccount).toHaveBeenCalledTimes(1));
+    });
+
+    it('shows a mapped error message and keeps the member signed in when deletion fails', async () => {
+      const deleteAccount = jest.fn().mockRejectedValue({
+        isAxiosError: true,
+        response: { status: 500, data: { code: 'INTERNAL_ERROR', message: 'boom' } },
+        toJSON: () => ({}),
+      });
+      authAs(member(), jest.fn(), deleteAccount);
+      jest.spyOn(Alert, 'alert').mockImplementation((_title, _message, buttons) => {
+        const destructive = buttons?.find((button) => button.style === 'destructive');
+        destructive?.onPress?.();
+      });
+
+      renderScreen();
+      fireEvent.press(screen.getByLabelText('Delete account'));
+
+      expect(await screen.findByText('boom')).toBeTruthy();
+      // Still on the profile screen, still showing the authenticated
+      // member's own identity - deletion failing must never sign anyone out.
+      expect(screen.getByText('ada@example.com')).toBeTruthy();
     });
   });
 });

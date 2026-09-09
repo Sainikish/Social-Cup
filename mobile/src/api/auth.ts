@@ -28,3 +28,9 @@ export async function getCurrentUser(): Promise<MemberDto> {
   const response = await apiClient.get<MemberDto>(AUTH_ME_PATH);
   return response.data;
 }
+
+// Backend returns 204 No Content on success - nothing to read off the
+// response, so this resolves to void rather than an empty object.
+export async function deleteAccount(): Promise<void> {
+  await apiClient.delete(AUTH_ME_PATH);
+}

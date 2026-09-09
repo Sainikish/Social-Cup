@@ -35,6 +35,7 @@ import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -200,6 +201,25 @@ class AuthControllerTest {
     @Test
     void me_withoutToken_returns401() throws Exception {
         mockMvc.perform(get("/auth/me"))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.code", is("UNAUTHENTICATED")));
+    }
+
+    @Test
+    void deleteMe_withValidBearerToken_returns204() throws Exception {
+        UUID memberId = UUID.randomUUID();
+        String token = tokenProvider.generateAccessToken(memberId.toString(), List.of(Roles.MEMBER));
+
+        mockMvc.perform(delete("/auth/me")
+                .header("Authorization", "Bearer " + token))
+            .andExpect(status().isNoContent());
+
+        org.mockito.Mockito.verify(authService).deleteAccount(memberId);
+    }
+
+    @Test
+    void deleteMe_withoutToken_returns401() throws Exception {
+        mockMvc.perform(delete("/auth/me"))
             .andExpect(status().isUnauthorized())
             .andExpect(jsonPath("$.code", is("UNAUTHENTICATED")));
     }
