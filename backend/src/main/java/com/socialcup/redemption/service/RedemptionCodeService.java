@@ -15,6 +15,7 @@ import com.socialcup.redemption.dto.RedemptionCodeResponse;
 import com.socialcup.redemption.entity.RedemptionCode;
 import com.socialcup.redemption.repository.RedemptionCodeRepository;
 import com.socialcup.user.entity.Member;
+import com.socialcup.user.entity.MemberStatus;
 import com.socialcup.user.repository.MemberRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -60,6 +61,18 @@ public class RedemptionCodeService {
     public RedemptionCodeResponse generateCode(UUID memberId, CreateRedemptionCodeRequest request) {
         Member member = memberRepository.findByIdAndDeletedAtIsNull(memberId)
             .orElseThrow(() -> new ResourceNotFoundException("Member not found with id: " + memberId));
+
+        // A Visitor never had credits to begin with (the balance check below
+        // would already stop them), but a member whose subscription has
+        // actually ended (CANCELLED) or been suspended can still be sitting
+        // on a leftover balance from their last active period - this is the
+        // only thing that stops them from continuing to spend it. Does NOT
+        // check for SubscriptionStatus.PAST_DUE: that's a deliberate Stripe
+        // retry grace period (see SubscriptionService's own class Javadoc),
+        // not a membership lapse.
+        if (member.getStatus() != MemberStatus.ACTIVE) {
+            throw new ConflictException("Member's membership is not active");
+        }
 
         Drink drink = drinkRepository.findByIdAndArchivedAtIsNull(request.drinkId())
             .orElseThrow(() -> new ResourceNotFoundException("Drink not found with id: " + request.drinkId()));

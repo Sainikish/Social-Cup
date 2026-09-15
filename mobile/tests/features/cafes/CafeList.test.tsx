@@ -35,9 +35,9 @@ const baseProps = {
 };
 
 describe('CafeList', () => {
-  it('shows a loading indicator on initial load', () => {
+  it('shows a skeleton placeholder on initial load', () => {
     render(<CafeList {...baseProps} cafes={[]} isLoading />);
-    expect(screen.getByText('Loading cafes...')).toBeTruthy();
+    expect(screen.getByTestId('cafe-list-skeleton')).toBeTruthy();
   });
 
   it('renders the list of cafes', () => {

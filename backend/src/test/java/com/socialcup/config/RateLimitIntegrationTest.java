@@ -1,6 +1,7 @@
 package com.socialcup.config;
 
 import com.socialcup.admin.repository.AuditLogRepository;
+import com.socialcup.auth.repository.VerificationCodeRepository;
 import com.socialcup.barista.repository.CafePinRepository;
 import com.socialcup.cafe.repository.CafeRepository;
 import com.socialcup.credit.repository.CreditLedgerRepository;
@@ -9,6 +10,7 @@ import com.socialcup.payout.repository.PayoutRepository;
 import com.socialcup.rating.repository.RatingRepository;
 import com.socialcup.redemption.repository.RedemptionCodeRepository;
 import com.socialcup.redemption.repository.RedemptionRepository;
+import com.socialcup.storage.repository.PhotoBlobRepository;
 import com.socialcup.subscription.repository.ProcessedWebhookEventRepository;
 import com.socialcup.subscription.repository.SubscriptionRepository;
 import com.socialcup.user.repository.MemberRepository;
@@ -88,6 +90,19 @@ class RateLimitIntegrationTest {
 
     @MockitoBean
     private PayoutRepository payoutRepository;
+
+    // Added when the email-verification/password-reset feature introduced
+    // AuthService's dependency on this repository - see SecurityIntegrationTest's
+    // class-level comment on why every JpaRepository reachable from the app
+    // context needs a @MockitoBean here.
+    @MockitoBean
+    private VerificationCodeRepository verificationCodeRepository;
+
+    // Added when PhotoStorageService moved cafe/drink photo storage off S3
+    // into this same database (see PhotoStorageService/PhotoController) -
+    // same reason as every other repository in this list.
+    @MockitoBean
+    private PhotoBlobRepository photoBlobRepository;
 
     @Test
     void requestsBeyondTheLimitReceive429() throws Exception {

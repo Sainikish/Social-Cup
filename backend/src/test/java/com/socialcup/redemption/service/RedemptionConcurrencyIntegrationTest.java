@@ -16,6 +16,7 @@ import com.socialcup.redemption.entity.RedemptionCode;
 import com.socialcup.redemption.repository.RedemptionCodeRepository;
 import com.socialcup.redemption.repository.RedemptionRepository;
 import com.socialcup.user.entity.Member;
+import com.socialcup.user.entity.MemberStatus;
 import com.socialcup.user.repository.MemberRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -93,6 +94,7 @@ class RedemptionConcurrencyIntegrationTest {
         Member member = new Member();
         member.setEmail("ada-" + UUID.randomUUID() + "@example.com");
         member.setFirstName("Ada");
+        member.setStatus(MemberStatus.ACTIVE);
         member = memberRepository.saveAndFlush(member);
         creditService.grantMonthlyCredits(member.getId(), "test-seed");
 

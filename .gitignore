@@ -5,3 +5,6 @@ tools/
 .DS_Store
 .idea/
 .vscode/
+
+# Runtime logs (backend writes here per application.yml's logging.file.name)
+logs/

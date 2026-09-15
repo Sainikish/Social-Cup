@@ -40,6 +40,10 @@ describe('LoginScreen', () => {
       logout: jest.fn(),
       deleteAccount: jest.fn(),
       initializeAuth: jest.fn(),
+      verifyEmail: jest.fn(),
+      resendVerificationEmail: jest.fn(),
+      forgotPassword: jest.fn(),
+      resetPassword: jest.fn(),
     });
 
     renderLoginScreen();
@@ -65,6 +69,10 @@ describe('LoginScreen', () => {
       logout: jest.fn(),
       deleteAccount: jest.fn(),
       initializeAuth: jest.fn(),
+      verifyEmail: jest.fn(),
+      resendVerificationEmail: jest.fn(),
+      forgotPassword: jest.fn(),
+      resetPassword: jest.fn(),
     });
 
     renderLoginScreen();
@@ -102,6 +110,10 @@ describe('LoginScreen', () => {
       logout: jest.fn(),
       deleteAccount: jest.fn(),
       initializeAuth: jest.fn(),
+      verifyEmail: jest.fn(),
+      resendVerificationEmail: jest.fn(),
+      forgotPassword: jest.fn(),
+      resetPassword: jest.fn(),
     });
 
     renderLoginScreen();

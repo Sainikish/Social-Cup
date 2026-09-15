@@ -4,7 +4,13 @@ import * as authApi from '../../api/auth';
 import { setOnAuthExpired } from '../../api/authSession';
 import { queryClient } from '../../lib/queryClient';
 import { clearAuthTokens, getAccessToken, getRefreshToken, saveAuthTokens } from '../../storage/authStorage';
-import type { LoginRequest, MemberDto, RegisterRequest } from '../../types/auth';
+import type {
+  ForgotPasswordRequest,
+  LoginRequest,
+  MemberDto,
+  RegisterRequest,
+  ResetPasswordRequest,
+} from '../../types/auth';
 
 export type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated';
 
@@ -16,6 +22,10 @@ export interface AuthContextValue {
   logout: () => Promise<void>;
   deleteAccount: () => Promise<void>;
   initializeAuth: () => Promise<void>;
+  verifyEmail: (code: string) => Promise<void>;
+  resendVerificationEmail: () => Promise<void>;
+  forgotPassword: (request: ForgotPasswordRequest) => Promise<void>;
+  resetPassword: (request: ResetPasswordRequest) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -108,9 +118,61 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await logout();
   }, [logout]);
 
+  // Updates the in-memory user with the backend's own response rather than
+  // just flipping a local flag - the same "trust the server's returned
+  // state" convention login/register/resetPassword already follow.
+  const verifyEmail = useCallback(async (code: string) => {
+    const updatedUser = await authApi.verifyEmail({ code });
+    setUser(updatedUser);
+  }, []);
+
+  const resendVerificationEmail = useCallback(async () => {
+    await authApi.resendVerificationEmail();
+  }, []);
+
+  // No session exists yet at this point (the member couldn't log in, that's
+  // the entire premise of "forgot password") - nothing to update locally.
+  const forgotPassword = useCallback(async (request: ForgotPasswordRequest) => {
+    await authApi.forgotPassword(request);
+  }, []);
+
+  // Mirrors login()/register(): the backend logs the member straight in on a
+  // successful reset, so this saves the returned tokens and user the exact
+  // same way, rather than requiring a separate login step right after.
+  const resetPassword = useCallback(async (request: ResetPasswordRequest) => {
+    const response = await authApi.resetPassword(request);
+    await saveAuthTokens({ accessToken: response.accessToken, refreshToken: response.refreshToken });
+    setUser(response.user);
+    setStatus('authenticated');
+  }, []);
+
   const value = useMemo<AuthContextValue>(
-    () => ({ status, user, login, register, logout, deleteAccount, initializeAuth }),
-    [status, user, login, register, logout, deleteAccount, initializeAuth]
+    () => ({
+      status,
+      user,
+      login,
+      register,
+      logout,
+      deleteAccount,
+      initializeAuth,
+      verifyEmail,
+      resendVerificationEmail,
+      forgotPassword,
+      resetPassword,
+    }),
+    [
+      status,
+      user,
+      login,
+      register,
+      logout,
+      deleteAccount,
+      initializeAuth,
+      verifyEmail,
+      resendVerificationEmail,
+      forgotPassword,
+      resetPassword,
+    ]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

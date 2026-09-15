@@ -25,13 +25,24 @@ export function validateRequiredPassword(password: string): string | undefined {
   return undefined;
 }
 
-// Mirrors RegisterRequest.password: @NotBlank + @Size(min = 8).
+// Mirrors RegisterRequest.password: @NotBlank + @Size(min = 8). Also reused
+// for ResetPasswordRequest.newPassword, which mirrors the exact same rule.
 export function validateNewPassword(password: string): string | undefined {
   if (!password) {
     return 'Password is required';
   }
   if (password.length < 8) {
     return 'Password must be at least 8 characters long';
+  }
+  return undefined;
+}
+
+// Mirrors VerifyEmailRequest.code / ResetPasswordRequest.code: @NotBlank
+// only - the backend is the sole judge of whether a code is well-formed or
+// correct, this just catches an empty submission before a round trip.
+export function validateVerificationCode(code: string): string | undefined {
+  if (!code.trim()) {
+    return 'Code is required';
   }
   return undefined;
 }

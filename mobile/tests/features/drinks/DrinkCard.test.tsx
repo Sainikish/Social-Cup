@@ -67,6 +67,17 @@ describe('DrinkCard', () => {
     expect(screen.getByText('🥤')).toBeTruthy();
   });
 
+  it('shows a "New" badge when averageRating is absent', () => {
+    render(<DrinkCard drink={drink()} onPress={() => {}} />);
+    expect(screen.getByText('New')).toBeTruthy();
+  });
+
+  it('shows the average rating and count once the drink has ratings', () => {
+    render(<DrinkCard drink={drink({ averageRating: 4.2, ratingCount: 8 })} onPress={() => {}} />);
+    expect(screen.getByText('4.2 (8)')).toBeTruthy();
+    expect(screen.queryByText('New')).toBeNull();
+  });
+
   it('has a useful accessibility label and calls onPress with the drink id', () => {
     const onPress = jest.fn();
     render(<DrinkCard drink={drink({ id: 'd42', name: 'Cold Brew' })} onPress={onPress} />);

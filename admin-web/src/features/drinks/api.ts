@@ -51,3 +51,14 @@ export async function updateDrinkStatus(id: string, request: UpdateDrinkStatusRe
   const response = await apiClient.patch<DrinkResponse>(`${ADMIN_DRINKS_PATH}/${id}/status`, request);
   return response.data;
 }
+
+// Requires an existing drink id (see AdminDrinkController) - only usable
+// from the detail/edit screen, never the create form. Replaces the drink's
+// one photoUrl outright; there is no gallery/primary concept for drinks
+// (unlike cafes).
+export async function uploadDrinkPhoto(id: string, file: File): Promise<DrinkResponse> {
+  const formData = new FormData();
+  formData.append('photo', file);
+  const response = await apiClient.post<DrinkResponse>(`${ADMIN_DRINKS_PATH}/${id}/photo`, formData);
+  return response.data;
+}

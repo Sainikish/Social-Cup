@@ -40,6 +40,7 @@ function member(overrides: Partial<MemberDto> = {}): MemberDto {
     status: 'ACTIVE',
     roles: ['MEMBER'],
     createdAt: new Date().toISOString(),
+    emailVerified: true,
     ...overrides,
   };
 }
@@ -75,6 +76,10 @@ function authAs(
     logout,
     deleteAccount,
     initializeAuth: jest.fn(),
+    verifyEmail: jest.fn(),
+    resendVerificationEmail: jest.fn(),
+    forgotPassword: jest.fn(),
+    resetPassword: jest.fn(),
   } satisfies AuthContextValue);
 }
 

@@ -31,3 +31,19 @@ export function registerErrorMessage(code: string): string {
       return 'Something went wrong. Please try again.';
   }
 }
+
+export function verificationCodeErrorMessage(code: string): string {
+  switch (code) {
+    case 'INVALID_VERIFICATION_CODE':
+      return 'That code is incorrect or has expired. Request a new one and try again.';
+    case 'CONFLICT':
+      return 'Your email is already verified.';
+    case 'RATE_LIMIT_EXCEEDED':
+      return 'Too many attempts. Please wait a moment and try again.';
+    case 'NETWORK_ERROR':
+    case 'REQUEST_TIMEOUT':
+      return 'Could not reach the server. Check your connection and try again.';
+    default:
+      return 'Something went wrong. Please try again.';
+  }
+}

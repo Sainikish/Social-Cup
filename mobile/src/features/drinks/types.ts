@@ -25,4 +25,13 @@ export interface DrinkResponse {
   status: DrinkStatus;
   createdAt: string;
   updatedAt: string;
+  // Both being added to DrinkResponse by a parallel backend workstream as of
+  // this writing - optional here because this client may run against a
+  // backend build from before or after that rollout. A drink with no ratings
+  // yet is expected to report averageRating: null (not merely omit the
+  // field), but both are treated identically by every consumer: render the
+  // "New" badge (see RatingSummaryBadge in features/ratings), never "0" or
+  // a crash. ratingCount defaults to being read as 0 when absent.
+  averageRating?: number | null;
+  ratingCount?: number;
 }

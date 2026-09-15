@@ -42,18 +42,22 @@ class DrinkMapperTest {
         drink.setSignature(true);
         drink.setStatus(DrinkStatus.ACTIVE);
 
-        DrinkResponse response = drinkMapper.toResponse(drink);
+        DrinkResponse response = drinkMapper.toResponse(drink, 4.5, 12L);
         assertThat(response.id()).isEqualTo(drink.getId());
         assertThat(response.cafeId()).isEqualTo(cafe.getId());
         assertThat(response.cafeName()).isEqualTo("Espresso Lab");
         assertThat(response.name()).isEqualTo("Flat White");
         assertThat(response.creditPrice()).isEqualTo(1);
         assertThat(response.signature()).isTrue();
+        assertThat(response.averageRating()).isEqualTo(4.5);
+        assertThat(response.ratingCount()).isEqualTo(12L);
 
-        DrinkSummaryResponse summary = drinkMapper.toSummaryResponse(drink);
+        DrinkSummaryResponse summary = drinkMapper.toSummaryResponse(drink, null, 0L);
         assertThat(summary.id()).isEqualTo(drink.getId());
         assertThat(summary.name()).isEqualTo("Flat White");
         assertThat(summary.creditPrice()).isEqualTo(1);
+        assertThat(summary.averageRating()).isNull();
+        assertThat(summary.ratingCount()).isZero();
     }
 
     @Test

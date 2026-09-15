@@ -2,12 +2,9 @@
 export type MemberStatus = 'VISITOR' | 'ACTIVE' | 'CANCELLED' | 'SUSPENDED';
 
 // Mirrors com.socialcup.auth.dto.MemberDto exactly - the ONLY member shape
-// that exists anywhere in the backend. Unlike Cafe/Drink, there is no
-// separate admin-facing detail DTO and no public GET-by-id endpoint at
-// all: this exact shape is returned only by GET /auth/me (the caller's own
-// record) and by the admin suspend/reactivate responses (the acted-on
-// member's record). It is never available for an arbitrary member except
-// as the result of acting on them.
+// that exists anywhere in the backend, returned by GET /auth/me, by
+// GET /admin/members (search) and GET /admin/members/{id}, and by the
+// admin suspend/reactivate responses alike.
 export interface MemberDto {
   id: string;
   email: string;
@@ -17,4 +14,10 @@ export interface MemberDto {
   status: MemberStatus | null;
   roles: string[];
   createdAt: string;
+  emailVerified: boolean;
+}
+
+// Mirrors com.socialcup.credit.dto.CreditBalanceResponse exactly.
+export interface CreditBalanceResponse {
+  balance: number;
 }

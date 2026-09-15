@@ -30,6 +30,8 @@ export type { CafeCardProps } from './components/CafeCard';
 export { CafeList } from './components/CafeList';
 export type { CafeListProps } from './components/CafeList';
 
+export { CafeListSkeleton } from './components/CafeListSkeleton';
+
 export { CafeSearchBar } from './components/CafeSearchBar';
 export type { CafeSearchBarProps } from './components/CafeSearchBar';
 

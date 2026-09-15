@@ -12,6 +12,10 @@ export function cafeErrorMessage(code: string): string {
       return 'Your session has expired. Please log in again.';
     case 'ACCESS_DENIED':
       return 'You are not authorized to perform this action.';
+    case 'INVALID_PHOTO':
+      return 'Please choose a JPEG, PNG, or WebP image no larger than 5MB.';
+    case 'PHOTO_UPLOAD_FAILED':
+      return 'Could not upload the photo right now. Please try again.';
     case 'NETWORK_ERROR':
     case 'REQUEST_TIMEOUT':
       return 'Could not reach the server. Check your connection and try again.';

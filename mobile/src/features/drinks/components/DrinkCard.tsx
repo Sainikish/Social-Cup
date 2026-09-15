@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Card } from '../../../components';
+import { RatingSummaryBadge } from '../../ratings';
 import { colors, fontSize, fontWeight, spacing } from '../../../theme';
 import type { DrinkResponse } from '../types';
 import { DrinkPhoto } from './DrinkPhoto';
@@ -29,6 +30,7 @@ export function DrinkCard({ drink, onPress }: DrinkCardProps) {
               {drink.name}
             </Text>
             {drink.signature ? <Text style={styles.signatureBadge}>★ Signature</Text> : null}
+            <RatingSummaryBadge averageRating={drink.averageRating} ratingCount={drink.ratingCount} />
           </View>
           <Text style={styles.cafeName} numberOfLines={1}>
             {drink.cafeName}

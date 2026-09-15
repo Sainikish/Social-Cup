@@ -62,7 +62,7 @@ class DrinkControllerTest {
     void getDrinkById_publiclyAccessible_returns200() throws Exception {
         UUID id = UUID.randomUUID();
         DrinkResponse drink = new DrinkResponse(
-            id, UUID.randomUUID(), "Cafe Star", "Cappuccino", "Coffee", "Foamy", new BigDecimal("4.25"), 1, "http://photo.jpg", false, DrinkStatus.ACTIVE, Instant.now(), Instant.now()
+            id, UUID.randomUUID(), "Cafe Star", "Cappuccino", "Coffee", "Foamy", new BigDecimal("4.25"), 1, "http://photo.jpg", false, DrinkStatus.ACTIVE, Instant.now(), Instant.now(), null, 0L
         );
 
         when(drinkService.getDrinkById(id)).thenReturn(drink);
@@ -88,7 +88,7 @@ class DrinkControllerTest {
     @Test
     void getSignatureDrinks_publiclyAccessible_returns200() throws Exception {
         DrinkResponse drink = new DrinkResponse(
-            UUID.randomUUID(), UUID.randomUUID(), "Cafe Star", "Honey Lavender Latte", "Signature", "Floral and sweet", new BigDecimal("6.00"), 1, "http://photo.jpg", true, DrinkStatus.ACTIVE, Instant.now(), Instant.now()
+            UUID.randomUUID(), UUID.randomUUID(), "Cafe Star", "Honey Lavender Latte", "Signature", "Floral and sweet", new BigDecimal("6.00"), 1, "http://photo.jpg", true, DrinkStatus.ACTIVE, Instant.now(), Instant.now(), null, 0L
         );
         PageResponse<DrinkResponse> page = PageResponse.of(new PageImpl<>(List.of(drink), PageRequest.of(0, 10), 1));
 

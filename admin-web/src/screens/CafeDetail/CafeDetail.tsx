@@ -1,16 +1,21 @@
-import { useState } from 'react';
+import { useRef, useState, type ChangeEvent } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 
 import { toApiError } from '../../api/client';
 import { Button, Card, ErrorState, LoadingState } from '../../components';
+import { config } from '../../config/env';
 import {
   CafeForm,
+  CafePinResetDialog,
   CafeStatusDialog,
   cafeErrorMessage,
   cafeFormValuesFromDetail,
   preservedHoursAndPhotos,
   toCafeRequestPayload,
-  usePublicCafeDetailQuery,
+  useAddCafePhotoMutation,
+  useAdminCafeDetailQuery,
+  useRemoveCafePhotoMutation,
+  useResetCafePinMutation,
   useUpdateCafeMutation,
   useUpdateCafeStatusMutation,
   validateCafeForm,
@@ -27,16 +32,16 @@ interface CafeDetailLocationState {
 
 const ALL_STATUSES: CafeStatus[] = ['ACTIVE', 'INACTIVE', 'ARCHIVED'];
 
-// Handles two distinct arrival paths, since there is no admin GET-by-id
-// endpoint to unify them behind:
-//  1. Fresh from Create (or a just-completed Edit/status change): the full
-//     AdminCafeDetailResponse - including payoutRate - is already in hand,
-//     carried via router state or held in local state after a mutation.
-//  2. "Cold": arrived via search or a typed ID with nothing in router
-//     state. Only the public GET /cafes/{id} (CafeDetailResponse) is
-//     available, which has every field EXCEPT payoutRate. That gap is
-//     surfaced to the admin explicitly (see CafeForm's payoutRateKnown
-//     prop) - it is never fabricated or defaulted.
+// Two arrival paths, both yielding the same AdminCafeDetailResponse shape
+// (payoutRate always known):
+//  1. Fresh from Create (or a just-completed Edit/status change): already
+//     in hand, carried via router state or held in local state after a
+//     mutation.
+//  2. "Cold": arrived via the admin cafe list or a typed ID with nothing in
+//     router state - fetched via GET /admin/cafes/{id}, which (unlike the
+//     old public-endpoint fallback this replaced) finds a cafe regardless
+//     of status, so an archived cafe reached from the admin list is never
+//     a dead end here.
 export function CafeDetail() {
   const { id } = useParams<{ id: string }>();
   const location = useLocation();
@@ -51,36 +56,49 @@ export function CafeDetail() {
   const [pendingStatus, setPendingStatus] = useState<CafeStatus | null>(null);
   const [statusError, setStatusError] = useState<string | undefined>();
   const [statusSucceeded, setStatusSucceeded] = useState(false);
+  const [photoError, setPhotoError] = useState<string | undefined>();
+  const [removingPhotoId, setRemovingPhotoId] = useState<string | null>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const [pinError, setPinError] = useState<string | undefined>();
+  const [revealedPin, setRevealedPin] = useState<string | null>(null);
 
-  const publicDetailQuery = usePublicCafeDetailQuery(id, { skip: Boolean(latestAdminDetail) });
+  const adminDetailQuery = useAdminCafeDetailQuery(id, { skip: Boolean(latestAdminDetail) });
   const updateMutation = useUpdateCafeMutation();
   const statusMutation = useUpdateCafeStatusMutation();
+  const addPhotoMutation = useAddCafePhotoMutation();
+  const removePhotoMutation = useRemoveCafePhotoMutation();
+  const resetPinMutation = useResetCafePinMutation();
 
   if (!id) {
     return <ErrorState message="No cafe was specified." />;
   }
 
-  if (!latestAdminDetail && publicDetailQuery.isLoading) {
+  if (!latestAdminDetail && adminDetailQuery.isLoading) {
     return <LoadingState label="Loading cafe…" />;
   }
 
-  if (!latestAdminDetail && publicDetailQuery.isError) {
-    const apiError = toApiError(publicDetailQuery.error);
+  if (!latestAdminDetail && adminDetailQuery.isError) {
+    const apiError = toApiError(adminDetailQuery.error);
     return (
-      <ErrorState message={cafeErrorMessage(apiError.code)} onRetry={() => publicDetailQuery.refetch()} />
+      <ErrorState message={cafeErrorMessage(apiError.code)} onRetry={() => adminDetailQuery.refetch()} />
     );
   }
 
-  const detail = latestAdminDetail ?? publicDetailQuery.data;
+  const detail = latestAdminDetail ?? adminDetailQuery.data;
   if (!detail) {
     return <ErrorState message="This cafe could not be found." />;
   }
 
   const primaryPhoto = detail.photos.find((photo) => photo.isPrimary) ?? detail.photos[0];
-  const payoutRateKnown = Boolean(latestAdminDetail);
+  // barista-web's LoginScreen does not currently read a `cafe` query param
+  // to pre-select a cafe (checked LoginScreen.tsx/features/cafeLogin - it
+  // only offers a manual CafeSearchSelect combobox), so this link does not
+  // yet skip that step. It is included anyway, harmlessly ignored today, so
+  // that adding pre-fill support to barista-web later needs no change here.
+  const scanLink = `${config.baristaWebUrl}/login?cafe=${detail.id}`;
   const initialValues: CafeFormValues = {
     ...cafeFormValuesFromDetail(detail),
-    payoutRate: latestAdminDetail?.payoutRate != null ? String(latestAdminDetail.payoutRate) : '',
+    payoutRate: detail.payoutRate != null ? String(detail.payoutRate) : '',
   };
 
   function handleSubmit(values: CafeFormValues) {
@@ -152,6 +170,73 @@ export function CafeDetail() {
     setStatusError(undefined);
   }
 
+  function handlePhotoSelected(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    // Always clear the input's own value, success or failure - otherwise
+    // selecting the exact same file again wouldn't re-fire onChange.
+    event.target.value = '';
+    if (!file) {
+      return;
+    }
+
+    setPhotoError(undefined);
+    addPhotoMutation.mutate(
+      { cafeId: id!, file },
+      {
+        // Only latestAdminDetail is merged here - if it's unset, `detail`
+        // is coming from adminDetailQuery instead, which the mutation's own
+        // onSuccess already invalidates so React Query refetches it with
+        // the new photo included.
+        onSuccess: (newPhoto) => {
+          setLatestAdminDetail((current) =>
+            current ? { ...current, photos: [...current.photos, newPhoto] } : current
+          );
+        },
+        onError: (error) => setPhotoError(cafeErrorMessage(toApiError(error).code)),
+      }
+    );
+  }
+
+  function handleRemovePhoto(photoId: string) {
+    setPhotoError(undefined);
+    setRemovingPhotoId(photoId);
+    removePhotoMutation.mutate(
+      { cafeId: id!, photoId },
+      {
+        onSuccess: () => {
+          setLatestAdminDetail((current) => {
+            if (!current) {
+              return current;
+            }
+            const removed = current.photos.find((photo) => photo.id === photoId);
+            const remaining = current.photos.filter((photo) => photo.id !== photoId);
+            if (removed?.isPrimary && remaining.length > 0 && !remaining.some((photo) => photo.isPrimary)) {
+              remaining[0] = { ...remaining[0], isPrimary: true };
+            }
+            return { ...current, photos: remaining };
+          });
+          setRemovingPhotoId(null);
+        },
+        onError: (error) => {
+          setPhotoError(cafeErrorMessage(toApiError(error).code));
+          setRemovingPhotoId(null);
+        },
+      }
+    );
+  }
+
+  function handleResetPin() {
+    setPinError(undefined);
+    resetPinMutation.mutate(id!, {
+      onSuccess: (data) => setRevealedPin(data.pin),
+      onError: (error) => setPinError(cafeErrorMessage(toApiError(error).code)),
+    });
+  }
+
+  function handleDismissPin() {
+    setRevealedPin(null);
+  }
+
   return (
     <div className={styles.container}>
       <nav className={styles.breadcrumbs} aria-label="Breadcrumb">
@@ -174,15 +259,59 @@ export function CafeDetail() {
       ) : null}
 
       <section className={styles.section}>
+        <h2 className={styles.sectionTitle}>Photos</h2>
+        <input
+          ref={photoInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          onChange={handlePhotoSelected}
+          disabled={addPhotoMutation.isPending}
+          aria-label="Upload cafe photo"
+        />
+        {addPhotoMutation.isPending ? <p className={styles.noticeText}>Uploading…</p> : null}
+        {photoError ? (
+          <p className={styles.formError} role="alert">
+            {photoError}
+          </p>
+        ) : null}
+        {detail.photos.length === 0 ? (
+          <p className={styles.emptyMessage}>No photos yet.</p>
+        ) : (
+          <ul className={styles.drinkList}>
+            {detail.photos.map((photo) => (
+              <li key={photo.id ?? photo.photoUrl} className={styles.drinkListItem}>
+                <img src={photo.photoUrl} alt={photo.caption ?? detail.name} className={styles.drinkThumbnail} />
+                <span>{photo.isPrimary ? 'Primary' : 'Photo'}</span>
+                {photo.id ? (
+                  <button
+                    type="button"
+                    className={styles.statusButton}
+                    onClick={() => handleRemovePhoto(photo.id!)}
+                    disabled={removingPhotoId === photo.id}
+                  >
+                    Remove
+                  </button>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className={styles.section}>
         <div className={styles.drinksSectionHeader}>
           <h2 className={styles.sectionTitle}>Drinks</h2>
           <div className={styles.drinkActions}>
             <Button
               label="Add Drink"
               variant="outline"
-              onClick={() => navigate(`/cafes/${id}/drinks/new`, { state: { cafeName: detail.name } })}
+              onClick={() =>
+                navigate(`/cafes/${id}/drinks/new`, {
+                  state: { cafeName: detail.name, payoutRate: detail.payoutRate },
+                })
+              }
             />
-            <Link to={`/cafes/${id}/drinks`} state={{ cafeName: detail.name }}>
+            <Link to={`/cafes/${id}/drinks`} state={{ cafeName: detail.name, payoutRate: detail.payoutRate }}>
               Manage Drinks
             </Link>
           </div>
@@ -211,6 +340,28 @@ export function CafeDetail() {
       </section>
 
       <section className={styles.section}>
+        <h2 className={styles.sectionTitle}>Barista Access</h2>
+        <p className={styles.noticeText}>
+          Baristas at this cafe log in to the scanner app with this cafe and a shared PIN. There is no admin
+          endpoint yet to view whether a PIN already exists - Generate/Reset always issues a brand-new one.
+        </p>
+        <div className={styles.settingItem}>
+          <span className={styles.settingLabel}>Scan / login link</span>
+          <code className={styles.scanLink}>{scanLink}</code>
+        </div>
+        <div className={styles.statusActions}>
+          <Button label="Generate / Reset PIN" variant="outline" onClick={handleResetPin} loading={resetPinMutation.isPending} disabled={resetPinMutation.isPending} />
+        </div>
+        {pinError ? (
+          <p className={styles.formError} role="alert">
+            {pinError}
+          </p>
+        ) : null}
+      </section>
+
+      <CafePinResetDialog open={revealedPin != null} pin={revealedPin} onDismiss={handleDismissPin} />
+
+      <section className={styles.section}>
         <div className={styles.drinksSectionHeader}>
           <h2 className={styles.sectionTitle}>Payouts</h2>
           <div className={styles.drinkActions}>
@@ -226,20 +377,10 @@ export function CafeDetail() {
         </p>
       </section>
 
-      {!payoutRateKnown ? (
-        <Card className={styles.notice}>
-          <p className={styles.noticeText}>
-            This cafe&apos;s <strong>payout rate</strong> is not shown - it was loaded from the public cafe
-            endpoint, which does not return it. Leave that field blank to keep the current value unchanged, or
-            enter a new value to set it.
-          </p>
-        </Card>
-      ) : null}
-
       <Card className={styles.notice}>
         <p className={styles.noticeText}>
-          Opening hours and photos are not editable on this screen yet - saving changes here keeps them exactly
-          as currently stored.
+          Opening hours are not editable on this screen yet - saving changes here keeps them exactly as currently
+          stored.
         </p>
       </Card>
 
@@ -284,7 +425,7 @@ export function CafeDetail() {
           submitLabel="Save Changes"
           formError={formError}
           fieldErrors={fieldErrors}
-          payoutRateKnown={payoutRateKnown}
+          payoutRateKnown
         />
         {updateSucceeded ? (
           <p className={styles.successMessage} role="status">

@@ -5,7 +5,9 @@ import com.socialcup.common.exception.ConflictException;
 import com.socialcup.common.exception.ResourceNotFoundException;
 import com.socialcup.drink.entity.Drink;
 import com.socialcup.drink.repository.DrinkRepository;
+import com.socialcup.rating.dto.CafeRatingAggregate;
 import com.socialcup.rating.dto.CreateRatingRequest;
+import com.socialcup.rating.dto.DrinkRatingAggregate;
 import com.socialcup.rating.dto.DrinkRatingResponse;
 import com.socialcup.rating.dto.RatingResponse;
 import com.socialcup.rating.dto.UpdateRatingRequest;
@@ -19,7 +21,11 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collection;
+import java.util.Map;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional
@@ -86,5 +92,40 @@ public class RatingService {
     public PageResponse<RatingResponse> getRatingsForMember(UUID memberId, Pageable pageable) {
         Page<DrinkRating> page = ratingRepository.findAllByMemberId(memberId, pageable);
         return PageResponse.of(page, ratingMapper::toResponse);
+    }
+
+    // Phase 6H (rating aggregation): batches an entire page of drinks into the
+    // single grouped query RatingRepository.findRatingAggregatesByDrinkIds runs,
+    // so DrinkService's listing methods never fire one rating query per row. An
+    // empty/null input short-circuits before touching the repository at all -
+    // both because there's nothing to look up, and because Hibernate would
+    // otherwise have to bind an empty "IN ()" list, which is invalid SQL.
+    // A drinkId with no ratings simply has no entry in the returned map -
+    // callers (DrinkMapper) must treat a missing key as "not yet rated", never
+    // default it to a fabricated 0.0 average.
+    @Transactional(readOnly = true)
+    public Map<UUID, DrinkRatingAggregate> getDrinkRatingAggregates(Collection<UUID> drinkIds) {
+        if (drinkIds == null || drinkIds.isEmpty()) {
+            return Map.of();
+        }
+        return ratingRepository.findRatingAggregatesByDrinkIds(drinkIds).stream()
+            .collect(Collectors.toMap(DrinkRatingAggregate::getDrinkId, Function.identity()));
+    }
+
+    // Phase 6H: the cafe-level counterpart above, backing CafeService's listing
+    // endpoints (CafeSummaryResponse), which never load a cafe's drinks at all
+    // - see RatingRepository.findCafeRatingAggregatesByCafeIds for why this is
+    // a genuinely different (average-of-averages) query, not just this same
+    // aggregate re-keyed by cafe. CafeDetailResponse/AdminCafeDetailResponse
+    // do NOT go through this method - they already load the cafe's full drink
+    // list, so CafeMapper derives the cafe average directly from those
+    // already-rated DrinkResponses instead of a second, redundant query.
+    @Transactional(readOnly = true)
+    public Map<UUID, CafeRatingAggregate> getCafeRatingAggregates(Collection<UUID> cafeIds) {
+        if (cafeIds == null || cafeIds.isEmpty()) {
+            return Map.of();
+        }
+        return ratingRepository.findCafeRatingAggregatesByCafeIds(cafeIds).stream()
+            .collect(Collectors.toMap(CafeRatingAggregate::getCafeId, Function.identity()));
     }
 }

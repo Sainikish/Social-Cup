@@ -1,4 +1,4 @@
-export { createDrink, getDrinksByCafe, getPublicDrinkById, updateDrink, updateDrinkStatus } from './api';
+export { createDrink, getDrinksByCafe, getPublicDrinkById, updateDrink, updateDrinkStatus, uploadDrinkPhoto } from './api';
 export type { DrinksByCafeParams } from './api';
 export { DrinkForm } from './components/DrinkForm';
 export type { DrinkFormProps } from './components/DrinkForm';
@@ -18,6 +18,7 @@ export {
   usePublicDrinkDetailQuery,
   useUpdateDrinkMutation,
   useUpdateDrinkStatusMutation,
+  useUploadDrinkPhotoMutation,
 } from './hooks';
 export { drinkKeys } from './queryKeys';
 export type {

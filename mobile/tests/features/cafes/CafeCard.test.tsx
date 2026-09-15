@@ -62,4 +62,21 @@ describe('CafeCard', () => {
     render(<CafeCard cafe={cafe({ distanceKm: 2.34 })} onPress={() => {}} />);
     expect(screen.getByText('2.3 km')).toBeTruthy();
   });
+
+  it('shows a "New" badge when averageRating is null', () => {
+    render(<CafeCard cafe={cafe({ averageRating: null, ratingCount: 0 })} onPress={() => {}} />);
+    expect(screen.getByText('New')).toBeTruthy();
+  });
+
+  it('shows the same "New" badge when averageRating/ratingCount are absent entirely (older backend)', () => {
+    const { averageRating: _averageRating, ratingCount: _ratingCount, ...withoutRatingFields } = cafe();
+    render(<CafeCard cafe={withoutRatingFields as CafeSummaryResponse} onPress={() => {}} />);
+    expect(screen.getByText('New')).toBeTruthy();
+  });
+
+  it('shows the average rating and count once the cafe has ratings', () => {
+    render(<CafeCard cafe={cafe({ averageRating: 4.5, ratingCount: 12 })} onPress={() => {}} />);
+    expect(screen.getByText('4.5 (12)')).toBeTruthy();
+    expect(screen.queryByText('New')).toBeNull();
+  });
 });

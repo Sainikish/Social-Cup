@@ -1,20 +1,37 @@
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { toApiError } from '../../../src/api/client';
-import { ErrorState, LoadingIndicator } from '../../../src/components';
+import { Button, ErrorState, LoadingIndicator } from '../../../src/components';
 import {
   CafeDrinkList,
   CafeOpeningHours,
   CafePhotoGallery,
   useCafeDetailQuery,
   useCafeDrinksQuery,
+  type CafeDetailResponse,
 } from '../../../src/features/cafes';
 import { colors, fontSize, fontWeight, radius, spacing } from '../../../src/theme';
 import { genericErrorMessage } from '../../../src/utils/apiErrors';
 
 function normalizeWebsiteUrl(website: string): string {
   return /^https?:\/\//i.test(website) ? website : `https://${website}`;
+}
+
+// Apple Maps on iOS, Google Maps everywhere else (Android, and web as a
+// reasonable default) - both accept either a lat/lng pair or a plain address
+// as the destination, so a cafe missing coordinates still gets a working
+// link rather than no button at all.
+function directionsUrl(cafe: CafeDetailResponse): string {
+  const destination =
+    cafe.latitude != null && cafe.longitude != null
+      ? `${cafe.latitude},${cafe.longitude}`
+      : encodeURIComponent(cafe.address);
+
+  if (Platform.OS === 'ios') {
+    return `http://maps.apple.com/?daddr=${destination}`;
+  }
+  return `https://www.google.com/maps/dir/?api=1&destination=${destination}`;
 }
 
 export default function CafeDetailScreen() {
@@ -59,6 +76,13 @@ export default function CafeDetailScreen() {
             ) : null}
           </View>
           {location ? <Text style={styles.location}>{location}</Text> : null}
+
+          <Button
+            label="Get Directions"
+            accessibilityLabel={`Get directions to ${cafe.name}`}
+            variant="outline"
+            onPress={() => void Linking.openURL(directionsUrl(cafe))}
+          />
         </View>
 
         {cafe.description ? (

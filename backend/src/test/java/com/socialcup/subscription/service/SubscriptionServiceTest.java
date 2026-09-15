@@ -188,6 +188,7 @@ class SubscriptionServiceTest {
 
     @Test
     void cancel_success_setsCancelAtPeriodEnd_withoutChangingStatusYet() throws Exception {
+        when(memberRepository.findByIdAndDeletedAtIsNull(MEMBER_ID)).thenReturn(Optional.of(newMember(MEMBER_ID)));
         Subscription existing = new Subscription();
         existing.setStatus(SubscriptionStatus.ACTIVE);
         existing.setStripeSubscriptionId("sub_123");
@@ -209,6 +210,7 @@ class SubscriptionServiceTest {
 
     @Test
     void cancel_withNoSubscription_throwsResourceNotFound() {
+        when(memberRepository.findByIdAndDeletedAtIsNull(MEMBER_ID)).thenReturn(Optional.of(newMember(MEMBER_ID)));
         when(subscriptionRepository.findByMemberId(MEMBER_ID)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> subscriptionService.cancel(MEMBER_ID))
@@ -217,6 +219,7 @@ class SubscriptionServiceTest {
 
     @Test
     void cancel_alreadyCancelled_throwsConflict() {
+        when(memberRepository.findByIdAndDeletedAtIsNull(MEMBER_ID)).thenReturn(Optional.of(newMember(MEMBER_ID)));
         Subscription existing = new Subscription();
         existing.setStatus(SubscriptionStatus.CANCELLED);
         when(subscriptionRepository.findByMemberId(MEMBER_ID)).thenReturn(Optional.of(existing));
@@ -227,6 +230,7 @@ class SubscriptionServiceTest {
 
     @Test
     void cancel_alreadyScheduledForCancellation_throwsConflict() {
+        when(memberRepository.findByIdAndDeletedAtIsNull(MEMBER_ID)).thenReturn(Optional.of(newMember(MEMBER_ID)));
         Subscription existing = new Subscription();
         existing.setStatus(SubscriptionStatus.ACTIVE);
         existing.setCancelAtPeriodEnd(true);
@@ -234,6 +238,22 @@ class SubscriptionServiceTest {
 
         assertThatThrownBy(() -> subscriptionService.cancel(MEMBER_ID))
             .isInstanceOf(ConflictException.class);
+    }
+
+    // A deleted member's still-valid access token must not be able to keep
+    // acting on (or reading) their old subscription via /users/me/subscription
+    // - see CreditService.getBalance for the same fix applied there.
+    @Test
+    void cancel_forDeletedMember_throwsResourceNotFound_evenIfASubscriptionRowStillExists() {
+        when(memberRepository.findByIdAndDeletedAtIsNull(MEMBER_ID)).thenReturn(Optional.empty());
+        Subscription existing = new Subscription();
+        existing.setStatus(SubscriptionStatus.ACTIVE);
+        lenient().when(subscriptionRepository.findByMemberId(MEMBER_ID)).thenReturn(Optional.of(existing));
+
+        assertThatThrownBy(() -> subscriptionService.cancel(MEMBER_ID))
+            .isInstanceOf(ResourceNotFoundException.class);
+
+        verify(subscriptionRepository, never()).findByMemberId(any());
     }
 
     // ---- Cancel immediately (account deletion) ----
@@ -244,20 +264,28 @@ class SubscriptionServiceTest {
         Subscription existing = new Subscription();
         existing.setStatus(SubscriptionStatus.ACTIVE);
         existing.setStripeSubscriptionId("sub_123");
+        existing.setStripeCustomerId("cus_123");
         when(subscriptionRepository.findByMemberId(MEMBER_ID)).thenReturn(Optional.of(existing));
         when(subscriptionRepository.save(any(Subscription.class))).thenAnswer(inv -> inv.getArgument(0));
 
         com.stripe.model.Subscription retrieved = mock(com.stripe.model.Subscription.class);
         when(retrieved.cancel()).thenReturn(retrieved);
+        Customer customer = mock(Customer.class);
+        when(customer.delete()).thenReturn(customer);
 
-        try (MockedStatic<com.stripe.model.Subscription> subStatic = mockStatic(com.stripe.model.Subscription.class)) {
+        try (MockedStatic<com.stripe.model.Subscription> subStatic = mockStatic(com.stripe.model.Subscription.class);
+             MockedStatic<Customer> customerStatic = mockStatic(Customer.class)) {
             subStatic.when(() -> com.stripe.model.Subscription.retrieve("sub_123")).thenReturn(retrieved);
+            customerStatic.when(() -> Customer.retrieve("cus_123")).thenReturn(customer);
 
             subscriptionService.cancelImmediatelyForAccountDeletion(MEMBER_ID);
 
             // The immediate path, never the graceful update() used by cancel()
             // above - a deleted account must stop being billed right away.
             org.mockito.Mockito.verify(retrieved, never()).update(any(SubscriptionUpdateParams.class));
+            // The Stripe Customer's own PII (email, saved card) must not
+            // outlive local anonymization - see deleteStripeCustomer.
+            verify(customer).delete();
         }
 
         assertThat(existing.getStatus()).isEqualTo(SubscriptionStatus.CANCELLED);
@@ -269,14 +297,19 @@ class SubscriptionServiceTest {
         Subscription existing = new Subscription();
         existing.setStatus(SubscriptionStatus.PAST_DUE);
         existing.setStripeSubscriptionId("sub_123");
+        existing.setStripeCustomerId("cus_123");
         when(subscriptionRepository.findByMemberId(MEMBER_ID)).thenReturn(Optional.of(existing));
         when(subscriptionRepository.save(any(Subscription.class))).thenAnswer(inv -> inv.getArgument(0));
 
         com.stripe.model.Subscription retrieved = mock(com.stripe.model.Subscription.class);
         when(retrieved.cancel()).thenReturn(retrieved);
+        Customer customer = mock(Customer.class);
+        when(customer.delete()).thenReturn(customer);
 
-        try (MockedStatic<com.stripe.model.Subscription> subStatic = mockStatic(com.stripe.model.Subscription.class)) {
+        try (MockedStatic<com.stripe.model.Subscription> subStatic = mockStatic(com.stripe.model.Subscription.class);
+             MockedStatic<Customer> customerStatic = mockStatic(Customer.class)) {
             subStatic.when(() -> com.stripe.model.Subscription.retrieve("sub_123")).thenReturn(retrieved);
+            customerStatic.when(() -> Customer.retrieve("cus_123")).thenReturn(customer);
 
             subscriptionService.cancelImmediatelyForAccountDeletion(MEMBER_ID);
         }
@@ -293,17 +326,31 @@ class SubscriptionServiceTest {
         verify(subscriptionRepository, never()).save(any());
     }
 
+    // A member who had already voluntarily cancelled before deleting their
+    // account still has a real, live Stripe Customer record (with their real
+    // email/saved card) - skipping the subscription-cancel API call (already
+    // cancelled, nothing to do there) must NOT also skip scrubbing that
+    // Customer, which is the actual bug this test guards against regressing.
     @Test
-    void cancelImmediatelyForAccountDeletion_alreadyCancelled_doesNotCallStripeAgain() {
+    void cancelImmediatelyForAccountDeletion_alreadyCancelled_stillDeletesTheStripeCustomer_butDoesNotCancelAgain()
+            throws Exception {
         Subscription existing = new Subscription();
         existing.setStatus(SubscriptionStatus.CANCELLED);
         existing.setStripeSubscriptionId("sub_123");
+        existing.setStripeCustomerId("cus_123");
         when(subscriptionRepository.findByMemberId(MEMBER_ID)).thenReturn(Optional.of(existing));
 
-        try (MockedStatic<com.stripe.model.Subscription> subStatic = mockStatic(com.stripe.model.Subscription.class)) {
+        Customer customer = mock(Customer.class);
+        when(customer.delete()).thenReturn(customer);
+
+        try (MockedStatic<com.stripe.model.Subscription> subStatic = mockStatic(com.stripe.model.Subscription.class);
+             MockedStatic<Customer> customerStatic = mockStatic(Customer.class)) {
+            customerStatic.when(() -> Customer.retrieve("cus_123")).thenReturn(customer);
+
             subscriptionService.cancelImmediatelyForAccountDeletion(MEMBER_ID);
 
             subStatic.verify(() -> com.stripe.model.Subscription.retrieve(any()), never());
+            verify(customer).delete();
         }
 
         verify(subscriptionRepository, never()).save(any());
@@ -331,14 +378,72 @@ class SubscriptionServiceTest {
         verify(subscriptionRepository, never()).save(any());
     }
 
+    @Test
+    void cancelImmediatelyForAccountDeletion_whenStripeCustomerDeletionFails_propagatesAsConflict() throws Exception {
+        Subscription existing = new Subscription();
+        existing.setStatus(SubscriptionStatus.ACTIVE);
+        existing.setStripeSubscriptionId("sub_123");
+        existing.setStripeCustomerId("cus_123");
+        when(subscriptionRepository.findByMemberId(MEMBER_ID)).thenReturn(Optional.of(existing));
+        when(subscriptionRepository.save(any(Subscription.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        com.stripe.model.Subscription retrieved = mock(com.stripe.model.Subscription.class);
+        when(retrieved.cancel()).thenReturn(retrieved);
+
+        try (MockedStatic<com.stripe.model.Subscription> subStatic = mockStatic(com.stripe.model.Subscription.class);
+             MockedStatic<Customer> customerStatic = mockStatic(Customer.class)) {
+            subStatic.when(() -> com.stripe.model.Subscription.retrieve("sub_123")).thenReturn(retrieved);
+            customerStatic.when(() -> Customer.retrieve("cus_123"))
+                .thenThrow(new ApiConnectionException("Stripe unreachable"));
+
+            // The subscription cancellation already committed to Stripe by
+            // this point - a failure scrubbing the Customer must still roll
+            // back this ENTIRE transaction (see AuthService.deleteAccount),
+            // so the caller never anonymizes a member whose Stripe PII wasn't
+            // actually cleaned up.
+            assertThatThrownBy(() -> subscriptionService.cancelImmediatelyForAccountDeletion(MEMBER_ID))
+                .isInstanceOf(ConflictException.class);
+        }
+    }
+
     // ---- Read ----
 
     @Test
+    void getMySubscription_success_returnsTheSubscription() {
+        when(memberRepository.findByIdAndDeletedAtIsNull(MEMBER_ID)).thenReturn(Optional.of(newMember(MEMBER_ID)));
+        Subscription existing = new Subscription();
+        existing.setStatus(SubscriptionStatus.ACTIVE);
+        existing.setStripeSubscriptionId("sub_123");
+        existing.setStripeCustomerId("cus_123");
+        when(subscriptionRepository.findByMemberId(MEMBER_ID)).thenReturn(Optional.of(existing));
+
+        SubscriptionResponse response = subscriptionService.getMySubscription(MEMBER_ID);
+
+        assertThat(response.status()).isEqualTo(SubscriptionStatus.ACTIVE);
+    }
+
+    @Test
     void getMySubscription_withNoSubscription_throwsResourceNotFound() {
+        when(memberRepository.findByIdAndDeletedAtIsNull(MEMBER_ID)).thenReturn(Optional.of(newMember(MEMBER_ID)));
         when(subscriptionRepository.findByMemberId(MEMBER_ID)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> subscriptionService.getMySubscription(MEMBER_ID))
             .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    // Same rationale as cancel_forDeletedMember_... above - GET
+    // /users/me/subscription must not keep answering for a deleted member.
+    @Test
+    void getMySubscription_forDeletedMember_throwsResourceNotFound_evenIfASubscriptionRowStillExists() {
+        when(memberRepository.findByIdAndDeletedAtIsNull(MEMBER_ID)).thenReturn(Optional.empty());
+        Subscription existing = new Subscription();
+        existing.setStatus(SubscriptionStatus.ACTIVE);
+        lenient().when(subscriptionRepository.findByMemberId(MEMBER_ID)).thenReturn(Optional.of(existing));
+
+        assertThatThrownBy(() -> subscriptionService.getMySubscription(MEMBER_ID))
+            .isInstanceOf(ResourceNotFoundException.class);
+
+        verify(subscriptionRepository, never()).findByMemberId(any());
     }
 
     // ---- Webhook: invoice.payment_succeeded ----

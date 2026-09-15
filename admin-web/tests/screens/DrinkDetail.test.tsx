@@ -4,7 +4,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 
 import { useAuth } from '../../src/auth/AuthContext';
 import type { AdminUser, AuthContextValue } from '../../src/auth/types';
-import { getPublicDrinkById, updateDrink, updateDrinkStatus } from '../../src/features/drinks/api';
+import { getPublicDrinkById, updateDrink, updateDrinkStatus, uploadDrinkPhoto } from '../../src/features/drinks/api';
 import type { DrinkResponse } from '../../src/features/drinks/types';
 import { AppRouter } from '../../src/routes/AppRouter';
 import { DrinkDetail } from '../../src/screens/DrinkDetail/DrinkDetail';
@@ -18,6 +18,7 @@ vi.mock('../../src/auth/AuthContext', async () => {
 const mockGetPublicDrinkById = vi.mocked(getPublicDrinkById);
 const mockUpdateDrink = vi.mocked(updateDrink);
 const mockUpdateDrinkStatus = vi.mocked(updateDrinkStatus);
+const mockUploadDrinkPhoto = vi.mocked(uploadDrinkPhoto);
 const mockUseAuth = vi.mocked(useAuth);
 
 function adminUser(overrides: Partial<AdminUser> = {}): AdminUser {
@@ -243,6 +244,45 @@ describe('DrinkDetail - status change', () => {
 
     resolveStatus({ ...DRINK, status: 'INACTIVE' });
     await screen.findByText('Status updated to INACTIVE.');
+  });
+});
+
+describe('DrinkDetail - photo upload', () => {
+  function selectFile(file: File) {
+    const input = screen.getByLabelText('Upload drink photo');
+    fireEvent.change(input, { target: { files: [file] } });
+  }
+
+  it('uploads a photo and replaces the displayed photoUrl on success', async () => {
+    mockGetPublicDrinkById.mockResolvedValue(DRINK);
+    mockUploadDrinkPhoto.mockResolvedValue({ ...DRINK, photoUrl: 'https://example.test/uploaded.jpg' });
+    renderCold();
+
+    await screen.findByText('Iced Latte', { selector: 'h1' });
+    const file = new File(['fake-bytes'], 'photo.jpg', { type: 'image/jpeg' });
+    selectFile(file);
+
+    await waitFor(() => expect(mockUploadDrinkPhoto).toHaveBeenCalledWith('drink-1', file));
+    const image = await screen.findByRole('img');
+    expect(image).toHaveAttribute('src', 'https://example.test/uploaded.jpg');
+  });
+
+  it('shows an error message when the backend rejects the photo', async () => {
+    mockGetPublicDrinkById.mockResolvedValue(DRINK);
+    mockUploadDrinkPhoto.mockRejectedValue({
+      isAxiosError: true,
+      response: { status: 400, data: { code: 'INVALID_PHOTO', message: 'bad photo' } },
+      toJSON: () => ({}),
+    });
+    renderCold();
+
+    await screen.findByText('Iced Latte', { selector: 'h1' });
+    selectFile(new File(['fake-bytes'], 'photo.jpg', { type: 'image/jpeg' }));
+
+    expect(
+      await screen.findByText('Please choose a JPEG, PNG, or WebP image no larger than 5MB.')
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
   });
 });
 

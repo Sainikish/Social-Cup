@@ -2,17 +2,17 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 
-import { searchCafes } from '../../src/features/cafes/api';
+import { searchCafesForAdmin } from '../../src/features/cafes/api';
 import type { CafeSummaryResponse } from '../../src/features/cafes/types';
 import type { PageResponse } from '../../src/types/api';
 import { CafeList } from '../../src/screens/CafeList/CafeList';
 
 vi.mock('../../src/features/cafes/api');
 
-const mockSearchCafes = vi.mocked(searchCafes);
+const mockSearchCafesForAdmin = vi.mocked(searchCafesForAdmin);
 
 function page(content: CafeSummaryResponse[]): PageResponse<CafeSummaryResponse> {
-  return { content, page: 0, size: 20, totalElements: content.length, totalPages: 1, first: true, last: true, empty: content.length === 0 };
+  return { content, page: 0, size: 20, totalElements: content.length, totalPages: content.length > 0 ? 1 : 0, first: true, last: true, empty: content.length === 0 };
 }
 
 const SAMPLE_CAFE: CafeSummaryResponse = {
@@ -27,6 +27,13 @@ const SAMPLE_CAFE: CafeSummaryResponse = {
   vibeTags: null,
   primaryPhotoUrl: null,
   distanceKm: null,
+};
+
+const ARCHIVED_CAFE: CafeSummaryResponse = {
+  ...SAMPLE_CAFE,
+  id: 'cafe-2',
+  name: 'Closed Shop',
+  status: 'ARCHIVED',
 };
 
 function renderScreen() {
@@ -49,76 +56,78 @@ beforeEach(() => {
 });
 
 describe('CafeList', () => {
-  it('renders without searching, clearly stating the active-cafes-only limitation', () => {
+  it('shows a loading state before the data resolves', () => {
+    mockSearchCafesForAdmin.mockReturnValue(new Promise(() => {}));
     renderScreen();
 
-    expect(screen.getByText('active-cafes-only')).toBeInTheDocument();
-    expect(screen.queryByText(/all cafes/i)).not.toBeInTheDocument();
-    expect(mockSearchCafes).not.toHaveBeenCalled();
+    expect(screen.getByText('Loading cafes…')).toBeInTheDocument();
   });
 
-  it('searches and shows matching results', async () => {
-    mockSearchCafes.mockResolvedValue(page([SAMPLE_CAFE]));
+  it('requests the first page with no filters on initial render', () => {
+    mockSearchCafesForAdmin.mockResolvedValue(page([]));
     renderScreen();
 
-    fireEvent.change(screen.getByLabelText('Search active cafes by name'), { target: { value: 'grind' } });
-    fireEvent.click(screen.getByText('Search'));
-
-    expect(await screen.findByText('Daily Grind')).toBeInTheDocument();
-    expect(mockSearchCafes).toHaveBeenCalledWith({ q: 'grind' });
+    expect(mockSearchCafesForAdmin).toHaveBeenCalledWith({ page: 0, size: 20 });
   });
 
-  it('renders a thumbnail when primaryPhotoUrl is present, and none when it is null', async () => {
-    const withPhoto: CafeSummaryResponse = { ...SAMPLE_CAFE, id: 'cafe-2', name: 'Sunrise Roasters', primaryPhotoUrl: 'https://example.test/cafe.jpg' };
-    mockSearchCafes.mockResolvedValue(page([SAMPLE_CAFE, withPhoto]));
+  it('renders a professional empty state for an empty page, not an error', async () => {
+    mockSearchCafesForAdmin.mockResolvedValue(page([]));
     renderScreen();
 
-    fireEvent.change(screen.getByLabelText('Search active cafes by name'), { target: { value: 'coffee' } });
-    fireEvent.click(screen.getByText('Search'));
-
-    await screen.findByText('Sunrise Roasters');
-    expect(screen.getAllByRole('img')).toHaveLength(1);
-    expect(screen.getByRole('img')).toHaveAttribute('src', 'https://example.test/cafe.jpg');
+    expect(await screen.findByText('No cafes matched these filters.')).toBeInTheDocument();
   });
 
-  it('shows an empty-results message for a search with no matches', async () => {
-    mockSearchCafes.mockResolvedValue(page([]));
-    renderScreen();
-
-    fireEvent.change(screen.getByLabelText('Search active cafes by name'), { target: { value: 'nowhere' } });
-    fireEvent.click(screen.getByText('Search'));
-
-    expect(await screen.findByText('No active cafes matched "nowhere".')).toBeInTheDocument();
-  });
-
-  it('shows an error state with retry on a search API failure', async () => {
-    mockSearchCafes.mockRejectedValue({
+  it('renders an error state with retry on a search API failure', async () => {
+    mockSearchCafesForAdmin.mockRejectedValue({
       isAxiosError: true,
       response: { status: 500, data: { code: 'INTERNAL_ERROR', message: 'boom' } },
       toJSON: () => ({}),
     });
     renderScreen();
 
-    fireEvent.change(screen.getByLabelText('Search active cafes by name'), { target: { value: 'grind' } });
-    fireEvent.click(screen.getByText('Search'));
-
     expect(await screen.findByText('Something went wrong. Please try again.')).toBeInTheDocument();
   });
 
+  it('renders cafes of any status, including archived, linking each row to its detail screen', async () => {
+    mockSearchCafesForAdmin.mockResolvedValue(page([SAMPLE_CAFE, ARCHIVED_CAFE]));
+    renderScreen();
+
+    expect(await screen.findByText('Closed Shop')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Daily Grind'));
+    expect(screen.getByText('Cafe Detail Screen')).toBeInTheDocument();
+  });
+
+  it('applies the search query and status filter together', async () => {
+    mockSearchCafesForAdmin.mockResolvedValue(page([]));
+    renderScreen();
+    await screen.findByText('No cafes matched these filters.');
+
+    fireEvent.change(screen.getByLabelText('Search by name or address'), { target: { value: 'grind' } });
+    fireEvent.change(screen.getByLabelText('Status'), { target: { value: 'ARCHIVED' } });
+    fireEvent.click(screen.getByText('Search'));
+
+    expect(mockSearchCafesForAdmin).toHaveBeenLastCalledWith({ q: 'grind', status: 'ARCHIVED', page: 0, size: 20 });
+  });
+
+  it('reset clears the applied filters', async () => {
+    mockSearchCafesForAdmin.mockResolvedValue(page([]));
+    renderScreen();
+    await screen.findByText('No cafes matched these filters.');
+
+    fireEvent.change(screen.getByLabelText('Search by name or address'), { target: { value: 'grind' } });
+    fireEvent.click(screen.getByText('Search'));
+    fireEvent.click(screen.getByText('Reset'));
+
+    expect(mockSearchCafesForAdmin).toHaveBeenLastCalledWith({ page: 0, size: 20 });
+  });
+
   it('navigates to /cafes/new when "Create Cafe" is pressed', () => {
+    mockSearchCafesForAdmin.mockResolvedValue(page([]));
     renderScreen();
 
     fireEvent.click(screen.getByText('Create Cafe'));
 
     expect(screen.getByText('Create Cafe Screen')).toBeInTheDocument();
-  });
-
-  it('opens a cafe directly by ID, for cafes that are not searchable (inactive/archived)', () => {
-    renderScreen();
-
-    fireEvent.change(screen.getByLabelText('Cafe ID'), { target: { value: 'cafe-42' } });
-    fireEvent.click(screen.getByText('Open'));
-
-    expect(screen.getByText('Cafe Detail Screen')).toBeInTheDocument();
   });
 });

@@ -7,11 +7,16 @@ import com.socialcup.auth.dto.LoginRequest;
 import com.socialcup.auth.dto.MemberDto;
 import com.socialcup.auth.dto.RefreshTokenRequest;
 import com.socialcup.auth.dto.RegisterRequest;
+import com.socialcup.auth.entity.VerificationCode;
+import com.socialcup.auth.entity.VerificationPurpose;
 import com.socialcup.auth.exception.AccountLockedException;
 import com.socialcup.auth.exception.InvalidCredentialsException;
 import com.socialcup.auth.exception.InvalidTokenException;
+import com.socialcup.auth.exception.InvalidVerificationCodeException;
+import com.socialcup.auth.repository.VerificationCodeRepository;
 import com.socialcup.common.exception.ConflictException;
 import com.socialcup.common.exception.ResourceNotFoundException;
+import com.socialcup.email.service.EmailService;
 import com.socialcup.security.JwtTokenProvider;
 import com.socialcup.security.Roles;
 import com.socialcup.subscription.service.SubscriptionService;
@@ -61,12 +66,19 @@ class AuthServiceTest {
     @Mock
     private AuditLogRepository auditLogRepository;
 
+    @Mock
+    private VerificationCodeRepository verificationCodeRepository;
+
+    @Mock
+    private EmailService emailService;
+
     private AuthService authService;
 
     @BeforeEach
     void setUp() {
         authService = new AuthService(
-            memberRepository, passwordEncoder, tokenProvider, subscriptionService, auditLogRepository, 15);
+            memberRepository, passwordEncoder, tokenProvider, subscriptionService, auditLogRepository,
+            verificationCodeRepository, emailService, 15);
     }
 
     @Test
@@ -105,6 +117,58 @@ class AuthServiceTest {
         // controllable by RegisterRequest, which has no role field at all.
         assertThat(saved.getRole()).isEqualTo(MemberRole.MEMBER);
         assertThat(response.user().roles()).containsExactly(Roles.MEMBER);
+    }
+
+    @Test
+    void register_success_alsoIssuesAndSendsAnEmailVerificationCode() {
+        RegisterRequest request = new RegisterRequest("user@example.com", "password123", "John", "Doe");
+        UUID memberId = UUID.randomUUID();
+
+        when(memberRepository.existsByEmailAndDeletedAtIsNull("user@example.com")).thenReturn(false);
+        when(passwordEncoder.encode(anyString())).thenReturn("hashed");
+        when(memberRepository.save(any(Member.class))).thenAnswer(invocation -> {
+            Member m = invocation.getArgument(0);
+            m.setId(memberId);
+            return m;
+        });
+        when(tokenProvider.generateAccessToken(any(), any())).thenReturn("access-token");
+        when(tokenProvider.generateRefreshToken(any())).thenReturn("refresh-token");
+
+        authService.register(request);
+
+        ArgumentCaptor<VerificationCode> captor = ArgumentCaptor.forClass(VerificationCode.class);
+        verify(verificationCodeRepository).save(captor.capture());
+        VerificationCode saved = captor.getValue();
+        assertThat(saved.getPurpose()).isEqualTo(VerificationPurpose.EMAIL_VERIFICATION);
+        assertThat(saved.getMember().getId()).isEqualTo(memberId);
+        assertThat(saved.getExpiresAt()).isAfter(Instant.now());
+
+        verify(emailService).sendVerificationCode(eq("user@example.com"), anyString());
+    }
+
+    // A member must still be able to register even if SES rejects the send
+    // (e.g. no real AWS credentials configured yet) - see AuthService's own
+    // reasoning on issueAndSendCode.
+    @Test
+    void register_whenVerificationEmailFailsToSend_stillCompletesRegistration() {
+        RegisterRequest request = new RegisterRequest("user@example.com", "password123", "John", "Doe");
+        UUID memberId = UUID.randomUUID();
+
+        when(memberRepository.existsByEmailAndDeletedAtIsNull("user@example.com")).thenReturn(false);
+        when(passwordEncoder.encode(anyString())).thenReturn("hashed");
+        when(memberRepository.save(any(Member.class))).thenAnswer(invocation -> {
+            Member m = invocation.getArgument(0);
+            m.setId(memberId);
+            return m;
+        });
+        when(tokenProvider.generateAccessToken(any(), any())).thenReturn("access-token");
+        when(tokenProvider.generateRefreshToken(any())).thenReturn("refresh-token");
+        org.mockito.Mockito.doThrow(new RuntimeException("SES not configured"))
+            .when(emailService).sendVerificationCode(anyString(), anyString());
+
+        AuthResponse response = authService.register(request);
+
+        assertThat(response.accessToken()).isEqualTo("access-token");
     }
 
     @Test
@@ -344,6 +408,253 @@ class AuthServiceTest {
 
         assertThatThrownBy(() -> authService.getCurrentMember(memberId))
             .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    // ---- Email verification ----
+
+    private static VerificationCode activeCode(Member member, VerificationPurpose purpose, String codeHash) {
+        VerificationCode code = new VerificationCode();
+        code.setMember(member);
+        code.setPurpose(purpose);
+        code.setCodeHash(codeHash);
+        code.setExpiresAt(Instant.now().plusSeconds(600));
+        return code;
+    }
+
+    @Test
+    void verifyEmail_success_marksVerifiedAndConsumesTheCode() {
+        UUID memberId = UUID.randomUUID();
+        Member member = new Member();
+        member.setId(memberId);
+        member.setEmail("user@example.com");
+        member.setEmailVerified(false);
+        VerificationCode code = activeCode(member, VerificationPurpose.EMAIL_VERIFICATION, "hashed-code");
+
+        when(memberRepository.findByIdAndDeletedAtIsNull(memberId)).thenReturn(Optional.of(member));
+        when(verificationCodeRepository.findFirstByMemberIdAndPurposeAndUsedAtIsNullOrderByCreatedAtDesc(
+                memberId, VerificationPurpose.EMAIL_VERIFICATION))
+            .thenReturn(Optional.of(code));
+        when(passwordEncoder.matches("123456", "hashed-code")).thenReturn(true);
+
+        MemberDto dto = authService.verifyEmail(memberId, "123456");
+
+        assertThat(dto.emailVerified()).isTrue();
+        assertThat(member.isEmailVerified()).isTrue();
+        assertThat(member.getEmailVerifiedAt()).isNotNull();
+        assertThat(code.getUsedAt()).isNotNull();
+        verify(verificationCodeRepository).save(code);
+        verify(memberRepository).save(member);
+    }
+
+    @Test
+    void verifyEmail_alreadyVerified_isIdempotent_andNeverTouchesAnyCode() {
+        UUID memberId = UUID.randomUUID();
+        Member member = new Member();
+        member.setId(memberId);
+        member.setEmailVerified(true);
+
+        when(memberRepository.findByIdAndDeletedAtIsNull(memberId)).thenReturn(Optional.of(member));
+
+        MemberDto dto = authService.verifyEmail(memberId, "123456");
+
+        assertThat(dto.emailVerified()).isTrue();
+        verify(verificationCodeRepository, never()).findFirstByMemberIdAndPurposeAndUsedAtIsNullOrderByCreatedAtDesc(any(), any());
+    }
+
+    @Test
+    void verifyEmail_noActiveCode_throwsInvalidVerificationCodeException() {
+        UUID memberId = UUID.randomUUID();
+        Member member = new Member();
+        member.setId(memberId);
+
+        when(memberRepository.findByIdAndDeletedAtIsNull(memberId)).thenReturn(Optional.of(member));
+        when(verificationCodeRepository.findFirstByMemberIdAndPurposeAndUsedAtIsNullOrderByCreatedAtDesc(
+                memberId, VerificationPurpose.EMAIL_VERIFICATION))
+            .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> authService.verifyEmail(memberId, "123456"))
+            .isInstanceOf(InvalidVerificationCodeException.class);
+    }
+
+    @Test
+    void verifyEmail_expiredCode_throwsInvalidVerificationCodeException() {
+        UUID memberId = UUID.randomUUID();
+        Member member = new Member();
+        member.setId(memberId);
+        VerificationCode code = activeCode(member, VerificationPurpose.EMAIL_VERIFICATION, "hashed-code");
+        code.setExpiresAt(Instant.now().minusSeconds(1));
+
+        when(memberRepository.findByIdAndDeletedAtIsNull(memberId)).thenReturn(Optional.of(member));
+        when(verificationCodeRepository.findFirstByMemberIdAndPurposeAndUsedAtIsNullOrderByCreatedAtDesc(
+                memberId, VerificationPurpose.EMAIL_VERIFICATION))
+            .thenReturn(Optional.of(code));
+
+        assertThatThrownBy(() -> authService.verifyEmail(memberId, "123456"))
+            .isInstanceOf(InvalidVerificationCodeException.class);
+        verify(passwordEncoder, never()).matches(any(), any());
+    }
+
+    @Test
+    void verifyEmail_tooManyFailedAttempts_throwsWithoutCheckingTheGuess() {
+        UUID memberId = UUID.randomUUID();
+        Member member = new Member();
+        member.setId(memberId);
+        VerificationCode code = activeCode(member, VerificationPurpose.EMAIL_VERIFICATION, "hashed-code");
+        code.setFailedAttempts(5);
+
+        when(memberRepository.findByIdAndDeletedAtIsNull(memberId)).thenReturn(Optional.of(member));
+        when(verificationCodeRepository.findFirstByMemberIdAndPurposeAndUsedAtIsNullOrderByCreatedAtDesc(
+                memberId, VerificationPurpose.EMAIL_VERIFICATION))
+            .thenReturn(Optional.of(code));
+
+        assertThatThrownBy(() -> authService.verifyEmail(memberId, "123456"))
+            .isInstanceOf(InvalidVerificationCodeException.class);
+        verify(passwordEncoder, never()).matches(any(), any());
+    }
+
+    @Test
+    void verifyEmail_wrongCode_incrementsFailedAttemptsAndThrows() {
+        UUID memberId = UUID.randomUUID();
+        Member member = new Member();
+        member.setId(memberId);
+        VerificationCode code = activeCode(member, VerificationPurpose.EMAIL_VERIFICATION, "hashed-code");
+
+        when(memberRepository.findByIdAndDeletedAtIsNull(memberId)).thenReturn(Optional.of(member));
+        when(verificationCodeRepository.findFirstByMemberIdAndPurposeAndUsedAtIsNullOrderByCreatedAtDesc(
+                memberId, VerificationPurpose.EMAIL_VERIFICATION))
+            .thenReturn(Optional.of(code));
+        when(passwordEncoder.matches("000000", "hashed-code")).thenReturn(false);
+
+        assertThatThrownBy(() -> authService.verifyEmail(memberId, "000000"))
+            .isInstanceOf(InvalidVerificationCodeException.class);
+
+        assertThat(code.getFailedAttempts()).isEqualTo(1);
+        assertThat(code.getUsedAt()).isNull();
+        assertThat(member.isEmailVerified()).isFalse();
+        verify(verificationCodeRepository).save(code);
+        verify(memberRepository, never()).save(any());
+    }
+
+    @Test
+    void resendVerificationEmail_success_issuesANewCode() {
+        UUID memberId = UUID.randomUUID();
+        Member member = new Member();
+        member.setId(memberId);
+        member.setEmail("user@example.com");
+        member.setEmailVerified(false);
+
+        when(memberRepository.findByIdAndDeletedAtIsNull(memberId)).thenReturn(Optional.of(member));
+
+        authService.resendVerificationEmail(memberId);
+
+        verify(verificationCodeRepository).save(any(VerificationCode.class));
+        verify(emailService).sendVerificationCode(eq("user@example.com"), anyString());
+    }
+
+    @Test
+    void resendVerificationEmail_alreadyVerified_throwsConflictException() {
+        UUID memberId = UUID.randomUUID();
+        Member member = new Member();
+        member.setId(memberId);
+        member.setEmailVerified(true);
+
+        when(memberRepository.findByIdAndDeletedAtIsNull(memberId)).thenReturn(Optional.of(member));
+
+        assertThatThrownBy(() -> authService.resendVerificationEmail(memberId))
+            .isInstanceOf(ConflictException.class);
+        verify(emailService, never()).sendVerificationCode(any(), any());
+    }
+
+    // ---- Forgot / reset password ----
+
+    @Test
+    void forgotPassword_existingMember_issuesAResetCode() {
+        Member member = new Member();
+        member.setId(UUID.randomUUID());
+        member.setEmail("user@example.com");
+
+        when(memberRepository.findByEmailAndDeletedAtIsNull("user@example.com")).thenReturn(Optional.of(member));
+
+        authService.forgotPassword("User@Example.com ");
+
+        ArgumentCaptor<VerificationCode> captor = ArgumentCaptor.forClass(VerificationCode.class);
+        verify(verificationCodeRepository).save(captor.capture());
+        assertThat(captor.getValue().getPurpose()).isEqualTo(VerificationPurpose.PASSWORD_RESET);
+        verify(emailService).sendPasswordResetCode(eq("user@example.com"), anyString());
+    }
+
+    // Never reveals whether the email exists - no exception, no email sent,
+    // no code issued, identical (empty) outcome either way from the caller's
+    // perspective.
+    @Test
+    void forgotPassword_unknownEmail_doesNothingAndNeverThrows() {
+        when(memberRepository.findByEmailAndDeletedAtIsNull(anyString())).thenReturn(Optional.empty());
+
+        authService.forgotPassword("nobody@example.com");
+
+        verify(verificationCodeRepository, never()).save(any());
+        verify(emailService, never()).sendPasswordResetCode(any(), any());
+    }
+
+    @Test
+    void resetPassword_success_setsNewPasswordLogsInAndClearsAnyLockout() {
+        UUID memberId = UUID.randomUUID();
+        Member member = new Member();
+        member.setId(memberId);
+        member.setEmail("user@example.com");
+        member.setPasswordHash("old-hashed-pwd");
+        member.setFailedLoginAttempts(3);
+        member.setLockedUntil(Instant.now().plusSeconds(300));
+        VerificationCode code = activeCode(member, VerificationPurpose.PASSWORD_RESET, "hashed-code");
+
+        when(memberRepository.findByEmailAndDeletedAtIsNull("user@example.com")).thenReturn(Optional.of(member));
+        when(verificationCodeRepository.findFirstByMemberIdAndPurposeAndUsedAtIsNullOrderByCreatedAtDesc(
+                memberId, VerificationPurpose.PASSWORD_RESET))
+            .thenReturn(Optional.of(code));
+        when(passwordEncoder.matches("123456", "hashed-code")).thenReturn(true);
+        when(passwordEncoder.encode("newpassword123")).thenReturn("new-hashed-pwd");
+        when(tokenProvider.generateAccessToken(eq(memberId.toString()), any())).thenReturn("access-token");
+        when(tokenProvider.generateRefreshToken(eq(memberId.toString()))).thenReturn("refresh-token");
+
+        AuthResponse response = authService.resetPassword("user@example.com", "123456", "newpassword123");
+
+        assertThat(response.accessToken()).isEqualTo("access-token");
+        assertThat(member.getPasswordHash()).isEqualTo("new-hashed-pwd");
+        assertThat(member.getFailedLoginAttempts()).isZero();
+        assertThat(member.getLockedUntil()).isNull();
+        assertThat(code.getUsedAt()).isNotNull();
+    }
+
+    // Indistinguishable from a wrong code - both throw the exact same
+    // exception, so a caller can never learn whether an email is registered.
+    @Test
+    void resetPassword_unknownEmail_throwsInvalidVerificationCodeException() {
+        when(memberRepository.findByEmailAndDeletedAtIsNull(anyString())).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> authService.resetPassword("nobody@example.com", "123456", "newpassword123"))
+            .isInstanceOf(InvalidVerificationCodeException.class);
+    }
+
+    @Test
+    void resetPassword_wrongCode_throwsAndNeverChangesThePassword() {
+        UUID memberId = UUID.randomUUID();
+        Member member = new Member();
+        member.setId(memberId);
+        member.setEmail("user@example.com");
+        member.setPasswordHash("old-hashed-pwd");
+        VerificationCode code = activeCode(member, VerificationPurpose.PASSWORD_RESET, "hashed-code");
+
+        when(memberRepository.findByEmailAndDeletedAtIsNull("user@example.com")).thenReturn(Optional.of(member));
+        when(verificationCodeRepository.findFirstByMemberIdAndPurposeAndUsedAtIsNullOrderByCreatedAtDesc(
+                memberId, VerificationPurpose.PASSWORD_RESET))
+            .thenReturn(Optional.of(code));
+        when(passwordEncoder.matches("000000", "hashed-code")).thenReturn(false);
+
+        assertThatThrownBy(() -> authService.resetPassword("user@example.com", "000000", "newpassword123"))
+            .isInstanceOf(InvalidVerificationCodeException.class);
+
+        assertThat(member.getPasswordHash()).isEqualTo("old-hashed-pwd");
+        verify(tokenProvider, never()).generateAccessToken(any(), any());
     }
 
     // ---- Delete account ----

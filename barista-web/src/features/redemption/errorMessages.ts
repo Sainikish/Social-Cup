@@ -2,18 +2,19 @@
 // codebase-wide errorMessages.ts convention (never display `message`
 // directly; it is backend-internal and free to change).
 //
-// One deliberate, narrow exception: the three CONFLICT sub-cases below DO
+// One deliberate, narrow exception: the four CONFLICT sub-cases below DO
 // inspect the backend's message text via conflictErrorMessage(). The
-// backend collapses "already redeemed", "expired", and "drink/cafe
-// unavailable" into the exact same single CONFLICT code (see
+// backend collapses "already redeemed", "expired", "drink/cafe unavailable",
+// and "membership inactive" into the exact same single CONFLICT code (see
 // RedemptionService.redeem and RedemptionCodeService.generateCode) - `code`
 // alone cannot distinguish them, and the product requirement is that a
-// barista sees which of the three actually happened. The substrings checked
+// barista sees which of the four actually happened. The substrings checked
 // are copied directly from those methods' real exception messages
 // ("Redemption code has already been redeemed", "...has expired", "...is
-// not currently available for redemption"). If a future backend wording
-// change breaks this match, it simply falls through to a generic CONFLICT
-// message below - the raw backend string is never rendered either way.
+// not currently available for redemption", "Member's membership is not
+// active"). If a future backend wording change breaks this match, it simply
+// falls through to a generic CONFLICT message below - the raw backend string
+// is never rendered either way.
 export function redemptionErrorMessage(code: string, message?: string): string {
   switch (code) {
     case 'RESOURCE_NOT_FOUND':
@@ -51,6 +52,9 @@ function conflictErrorMessage(message?: string): string {
   }
   if (normalized.includes('not currently available for redemption')) {
     return 'This drink is no longer available.';
+  }
+  if (normalized.includes('membership is not active')) {
+    return "This member's subscription is not active.";
   }
   return 'This code could not be redeemed.';
 }

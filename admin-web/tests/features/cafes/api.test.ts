@@ -1,6 +1,14 @@
 import { apiClient } from '../../../src/api/client';
-import { createCafe, getPublicCafeById, searchCafes, updateCafe, updateCafeStatus } from '../../../src/features/cafes/api';
-import type { AdminCafeDetailResponse, CafeDetailResponse, CreateCafeRequest } from '../../../src/features/cafes/types';
+import {
+  createCafe,
+  getCafeByIdForAdmin,
+  resetCafePin,
+  searchCafes,
+  searchCafesForAdmin,
+  updateCafe,
+  updateCafeStatus,
+} from '../../../src/features/cafes/api';
+import type { AdminCafeDetailResponse, CreateCafeRequest } from '../../../src/features/cafes/types';
 
 vi.mock('../../../src/api/client', async () => {
   const actual = await vi.importActual<typeof import('../../../src/api/client')>('../../../src/api/client');
@@ -49,27 +57,6 @@ const SAMPLE_ADMIN_DETAIL: AdminCafeDetailResponse = {
   updatedAt: '2026-01-01T00:00:00Z',
 };
 
-const SAMPLE_PUBLIC_DETAIL: CafeDetailResponse = {
-  id: 'cafe-1',
-  name: 'Daily Grind',
-  address: '123 Main St',
-  neighbourhood: 'Downtown',
-  latitude: 40.7128,
-  longitude: -74.006,
-  openingHours: [],
-  phoneNumber: '555-0100',
-  email: 'hello@dailygrind.test',
-  website: 'https://dailygrind.test',
-  featured: true,
-  vibeTags: 'cozy,quiet',
-  description: 'A cozy neighbourhood cafe.',
-  status: 'ACTIVE',
-  photos: [],
-  drinks: [],
-  createdAt: '2026-01-01T00:00:00Z',
-  updatedAt: '2026-01-01T00:00:00Z',
-};
-
 beforeEach(() => {
   vi.clearAllMocks();
 });
@@ -85,14 +72,26 @@ describe('cafes api', () => {
     expect(mockGet).toHaveBeenCalledWith('/cafes/search', { params: { q: 'grind', page: 0, size: 20 } });
   });
 
-  it('getPublicCafeById calls GET /cafes/{id} and returns the public detail response (no payoutRate)', async () => {
-    mockGet.mockResolvedValue({ data: SAMPLE_PUBLIC_DETAIL });
+  it('searchCafesForAdmin calls GET /admin/cafes with q/status/page/size params', async () => {
+    mockGet.mockResolvedValue({
+      data: { content: [], page: 0, size: 20, totalElements: 0, totalPages: 0, first: true, last: true, empty: true },
+    });
 
-    const result = await getPublicCafeById('cafe-1');
+    await searchCafesForAdmin({ q: 'grind', status: 'ARCHIVED' });
 
-    expect(mockGet).toHaveBeenCalledWith('/cafes/cafe-1');
-    expect(result).toEqual(SAMPLE_PUBLIC_DETAIL);
-    expect(result).not.toHaveProperty('payoutRate');
+    expect(mockGet).toHaveBeenCalledWith('/admin/cafes', {
+      params: { q: 'grind', status: 'ARCHIVED', page: 0, size: 20 },
+    });
+  });
+
+  it('getCafeByIdForAdmin calls GET /admin/cafes/{id} and returns the full admin detail (payoutRate included)', async () => {
+    mockGet.mockResolvedValue({ data: SAMPLE_ADMIN_DETAIL });
+
+    const result = await getCafeByIdForAdmin('cafe-1');
+
+    expect(mockGet).toHaveBeenCalledWith('/admin/cafes/cafe-1');
+    expect(result).toEqual(SAMPLE_ADMIN_DETAIL);
+    expect(result.payoutRate).toBe(0.1);
   });
 
   it('createCafe calls POST /admin/cafes with exactly the CreateCafeRequest shape given, no extra fields', async () => {
@@ -160,6 +159,15 @@ describe('cafes api', () => {
     mockPut.mockRejectedValue(notFoundError);
 
     await expect(updateCafe('missing-id', SAMPLE_CREATE_REQUEST)).rejects.toBe(notFoundError);
+  });
+
+  it('resetCafePin calls POST /admin/cafes/{id}/pin/reset and returns the new plaintext PIN', async () => {
+    mockPost.mockResolvedValue({ data: { pin: '482913' } });
+
+    const result = await resetCafePin('cafe-1');
+
+    expect(mockPost).toHaveBeenCalledWith('/admin/cafes/cafe-1/pin/reset');
+    expect(result).toEqual({ pin: '482913' });
   });
 
   it('updateCafeStatus propagates a generic server error unchanged', async () => {

@@ -1,7 +1,10 @@
 package com.socialcup.user.repository;
 
 import com.socialcup.user.entity.Member;
+import com.socialcup.user.entity.MemberStatus;
 import jakarta.persistence.LockModeType;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -37,4 +40,24 @@ public interface MemberRepository extends JpaRepository<Member, UUID> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT m FROM Member m WHERE m.id = :id AND m.deletedAt IS NULL")
     Optional<Member> findByIdAndDeletedAtIsNullForUpdate(@Param("id") UUID id);
+
+    // Admin member search: an optional case-insensitive substring match
+    // against email/first/last name, an optional exact status filter, both
+    // combinable, both nullable (a null parameter is a no-op condition) -
+    // never returns a deleted (soft-deleted/anonymized) member, same as
+    // every other lookup in this repository.
+    @Query("""
+        SELECT m FROM Member m
+        WHERE m.deletedAt IS NULL
+          AND (:status IS NULL OR m.status = :status)
+          AND (:searchQuery IS NULL
+               OR LOWER(m.email) LIKE LOWER(CONCAT('%', CAST(:searchQuery AS string), '%'))
+               OR LOWER(m.firstName) LIKE LOWER(CONCAT('%', CAST(:searchQuery AS string), '%'))
+               OR LOWER(m.lastName) LIKE LOWER(CONCAT('%', CAST(:searchQuery AS string), '%')))
+        """)
+    Page<Member> searchMembers(
+        @Param("searchQuery") String searchQuery,
+        @Param("status") MemberStatus status,
+        Pageable pageable
+    );
 }

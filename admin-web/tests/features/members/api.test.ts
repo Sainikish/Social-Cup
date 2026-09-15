@@ -1,13 +1,14 @@
 import { apiClient } from '../../../src/api/client';
-import { reactivateMember, suspendMember } from '../../../src/features/members/api';
+import { getMemberById, getMemberCreditBalance, reactivateMember, searchMembers, suspendMember } from '../../../src/features/members/api';
 import type { MemberDto } from '../../../src/features/members/types';
 
 vi.mock('../../../src/api/client', async () => {
   const actual = await vi.importActual<typeof import('../../../src/api/client')>('../../../src/api/client');
-  return { ...actual, apiClient: { post: vi.fn() } };
+  return { ...actual, apiClient: { post: vi.fn(), get: vi.fn() } };
 });
 
 const mockPost = vi.mocked(apiClient.post);
+const mockGet = vi.mocked(apiClient.get);
 
 const SAMPLE_MEMBER: MemberDto = {
   id: 'member-1',
@@ -18,6 +19,7 @@ const SAMPLE_MEMBER: MemberDto = {
   status: 'SUSPENDED',
   roles: ['MEMBER'],
   createdAt: '2026-01-01T00:00:00Z',
+  emailVerified: true,
 };
 
 beforeEach(() => {
@@ -25,6 +27,36 @@ beforeEach(() => {
 });
 
 describe('members api', () => {
+  it('searchMembers calls GET /admin/members with query/status/pagination params', async () => {
+    const page = { content: [SAMPLE_MEMBER], page: 0, size: 20, totalElements: 1, totalPages: 1, first: true, last: true, empty: false };
+    mockGet.mockResolvedValue({ data: page });
+
+    const result = await searchMembers({ q: 'ada', status: 'SUSPENDED' });
+
+    expect(mockGet).toHaveBeenCalledWith('/admin/members', {
+      params: { q: 'ada', status: 'SUSPENDED', page: 0, size: 20 },
+    });
+    expect(result).toEqual(page);
+  });
+
+  it('getMemberById calls GET /admin/members/{id}', async () => {
+    mockGet.mockResolvedValue({ data: SAMPLE_MEMBER });
+
+    const result = await getMemberById('member-1');
+
+    expect(mockGet).toHaveBeenCalledWith('/admin/members/member-1');
+    expect(result).toEqual(SAMPLE_MEMBER);
+  });
+
+  it('getMemberCreditBalance calls GET /admin/members/{id}/credits', async () => {
+    mockGet.mockResolvedValue({ data: { balance: 12 } });
+
+    const result = await getMemberCreditBalance('member-1');
+
+    expect(mockGet).toHaveBeenCalledWith('/admin/members/member-1/credits');
+    expect(result).toEqual({ balance: 12 });
+  });
+
   it('suspendMember calls POST /admin/members/{id}/suspend with no request body', async () => {
     mockPost.mockResolvedValue({ data: SAMPLE_MEMBER });
 

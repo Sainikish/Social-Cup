@@ -76,12 +76,17 @@ beforeEach(() => {
       status: 'ACTIVE',
       roles: ['MEMBER'],
       createdAt: new Date().toISOString(),
+      emailVerified: true,
     },
     login: jest.fn(),
     register: jest.fn(),
     logout: jest.fn(),
     deleteAccount: jest.fn(),
     initializeAuth: jest.fn(),
+    verifyEmail: jest.fn(),
+    resendVerificationEmail: jest.fn(),
+    forgotPassword: jest.fn(),
+    resetPassword: jest.fn(),
   });
 });
 
@@ -158,6 +163,10 @@ describe('DiaryScreen', () => {
       logout: jest.fn(),
       deleteAccount: jest.fn(),
       initializeAuth: jest.fn(),
+      verifyEmail: jest.fn(),
+      resendVerificationEmail: jest.fn(),
+      forgotPassword: jest.fn(),
+      resetPassword: jest.fn(),
     });
 
     renderScreen();

@@ -68,7 +68,7 @@ class AuthControllerTest {
     @Test
     void register_success_returnsCreated() throws Exception {
         UUID memberId = UUID.randomUUID();
-        MemberDto userDto = new MemberDto(memberId, "newuser@example.com", "John", "Doe", null, "VISITOR", List.of(Roles.MEMBER), Instant.now());
+        MemberDto userDto = new MemberDto(memberId, "newuser@example.com", "John", "Doe", null, "VISITOR", List.of(Roles.MEMBER), Instant.now(), true);
         AuthResponse authResponse = AuthResponse.of("mock-access", "mock-refresh", 900, userDto);
 
         when(authService.register(any(RegisterRequest.class))).thenReturn(authResponse);
@@ -127,7 +127,7 @@ class AuthControllerTest {
     @Test
     void login_success_returns200() throws Exception {
         UUID memberId = UUID.randomUUID();
-        MemberDto userDto = new MemberDto(memberId, "user@example.com", "John", "Doe", null, "ACTIVE", List.of(Roles.MEMBER), Instant.now());
+        MemberDto userDto = new MemberDto(memberId, "user@example.com", "John", "Doe", null, "ACTIVE", List.of(Roles.MEMBER), Instant.now(), true);
         AuthResponse authResponse = AuthResponse.of("access-token", "refresh-token", 900, userDto);
 
         when(authService.login(any(LoginRequest.class))).thenReturn(authResponse);
@@ -165,7 +165,7 @@ class AuthControllerTest {
     @Test
     void refresh_success_returns200() throws Exception {
         UUID memberId = UUID.randomUUID();
-        MemberDto userDto = new MemberDto(memberId, "user@example.com", "John", "Doe", null, "ACTIVE", List.of(Roles.MEMBER), Instant.now());
+        MemberDto userDto = new MemberDto(memberId, "user@example.com", "John", "Doe", null, "ACTIVE", List.of(Roles.MEMBER), Instant.now(), true);
         AuthResponse authResponse = AuthResponse.of("new-access-token", "new-refresh-token", 900, userDto);
 
         when(authService.refreshToken(any(RefreshTokenRequest.class))).thenReturn(authResponse);
@@ -187,7 +187,7 @@ class AuthControllerTest {
         UUID memberId = UUID.randomUUID();
         String token = tokenProvider.generateAccessToken(memberId.toString(), List.of(Roles.MEMBER));
 
-        MemberDto userDto = new MemberDto(memberId, "user@example.com", "John", "Doe", null, "ACTIVE", List.of(Roles.MEMBER), Instant.now());
+        MemberDto userDto = new MemberDto(memberId, "user@example.com", "John", "Doe", null, "ACTIVE", List.of(Roles.MEMBER), Instant.now(), true);
         when(authService.getCurrentMember(memberId)).thenReturn(userDto);
 
         mockMvc.perform(get("/auth/me")
@@ -222,5 +222,158 @@ class AuthControllerTest {
         mockMvc.perform(delete("/auth/me"))
             .andExpect(status().isUnauthorized())
             .andExpect(jsonPath("$.code", is("UNAUTHENTICATED")));
+    }
+
+    @Test
+    void verifyEmail_withValidBearerTokenAndCode_returns200() throws Exception {
+        UUID memberId = UUID.randomUUID();
+        String token = tokenProvider.generateAccessToken(memberId.toString(), List.of(Roles.MEMBER));
+        MemberDto userDto = new MemberDto(memberId, "user@example.com", "John", "Doe", null, "ACTIVE", List.of(Roles.MEMBER), Instant.now(), true);
+
+        when(authService.verifyEmail(memberId, "123456")).thenReturn(userDto);
+
+        mockMvc.perform(post("/auth/verify-email")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                        "code": "123456"
+                    }
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.emailVerified", is(true)));
+    }
+
+    @Test
+    void verifyEmail_withoutToken_returns401() throws Exception {
+        mockMvc.perform(post("/auth/verify-email")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                        "code": "123456"
+                    }
+                    """))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.code", is("UNAUTHENTICATED")));
+    }
+
+    @Test
+    void verifyEmail_invalidCode_returns400() throws Exception {
+        UUID memberId = UUID.randomUUID();
+        String token = tokenProvider.generateAccessToken(memberId.toString(), List.of(Roles.MEMBER));
+
+        when(authService.verifyEmail(any(), any()))
+            .thenThrow(new com.socialcup.auth.exception.InvalidVerificationCodeException());
+
+        mockMvc.perform(post("/auth/verify-email")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                        "code": "000000"
+                    }
+                    """))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code", is("INVALID_VERIFICATION_CODE")));
+    }
+
+    @Test
+    void resendVerificationEmail_withValidBearerToken_returns204() throws Exception {
+        UUID memberId = UUID.randomUUID();
+        String token = tokenProvider.generateAccessToken(memberId.toString(), List.of(Roles.MEMBER));
+
+        mockMvc.perform(post("/auth/resend-verification-email")
+                .header("Authorization", "Bearer " + token))
+            .andExpect(status().isNoContent());
+
+        org.mockito.Mockito.verify(authService).resendVerificationEmail(memberId);
+    }
+
+    @Test
+    void resendVerificationEmail_withoutToken_returns401() throws Exception {
+        mockMvc.perform(post("/auth/resend-verification-email"))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.code", is("UNAUTHENTICATED")));
+    }
+
+    @Test
+    void forgotPassword_noBearerTokenRequired_returns204() throws Exception {
+        mockMvc.perform(post("/auth/forgot-password")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                        "email": "user@example.com"
+                    }
+                    """))
+            .andExpect(status().isNoContent());
+
+        org.mockito.Mockito.verify(authService).forgotPassword("user@example.com");
+    }
+
+    @Test
+    void forgotPassword_invalidEmail_returns400() throws Exception {
+        mockMvc.perform(post("/auth/forgot-password")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                        "email": "not-an-email"
+                    }
+                    """))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code", is("VALIDATION_ERROR")));
+    }
+
+    @Test
+    void resetPassword_success_returns200WithAuthResponse() throws Exception {
+        UUID memberId = UUID.randomUUID();
+        MemberDto userDto = new MemberDto(memberId, "user@example.com", "John", "Doe", null, "ACTIVE", List.of(Roles.MEMBER), Instant.now(), true);
+        AuthResponse authResponse = AuthResponse.of("reset-access-token", "reset-refresh-token", 900, userDto);
+
+        when(authService.resetPassword("user@example.com", "123456", "newpassword123")).thenReturn(authResponse);
+
+        mockMvc.perform(post("/auth/reset-password")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                        "email": "user@example.com",
+                        "code": "123456",
+                        "newPassword": "newpassword123"
+                    }
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.accessToken", is("reset-access-token")));
+    }
+
+    @Test
+    void resetPassword_invalidCode_returns400() throws Exception {
+        when(authService.resetPassword(any(), any(), any()))
+            .thenThrow(new com.socialcup.auth.exception.InvalidVerificationCodeException());
+
+        mockMvc.perform(post("/auth/reset-password")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                        "email": "user@example.com",
+                        "code": "000000",
+                        "newPassword": "newpassword123"
+                    }
+                    """))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code", is("INVALID_VERIFICATION_CODE")));
+    }
+
+    @Test
+    void resetPassword_shortPassword_returns400() throws Exception {
+        mockMvc.perform(post("/auth/reset-password")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                        "email": "user@example.com",
+                        "code": "123456",
+                        "newPassword": "short"
+                    }
+                    """))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code", is("VALIDATION_ERROR")));
     }
 }

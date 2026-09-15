@@ -12,12 +12,16 @@ import org.springframework.stereotype.Component;
 @Component
 public class DrinkMapper {
 
-    public DrinkResponse toResponse(Drink drink) {
-        return DrinkResponse.fromEntity(drink);
+    // averageRating/ratingCount are supplied by the caller (DrinkService),
+    // resolved from a separate batched RatingRepository aggregate query rather
+    // than derived here - this mapper only ever shapes the entity's own
+    // columns, and a drink has no rating columns of its own.
+    public DrinkResponse toResponse(Drink drink, Double averageRating, long ratingCount) {
+        return DrinkResponse.fromEntity(drink, averageRating, ratingCount);
     }
 
-    public DrinkSummaryResponse toSummaryResponse(Drink drink) {
-        return DrinkSummaryResponse.fromEntity(drink);
+    public DrinkSummaryResponse toSummaryResponse(Drink drink, Double averageRating, long ratingCount) {
+        return DrinkSummaryResponse.fromEntity(drink, averageRating, ratingCount);
     }
 
     public Drink toEntity(CreateDrinkRequest request, Cafe cafe) {

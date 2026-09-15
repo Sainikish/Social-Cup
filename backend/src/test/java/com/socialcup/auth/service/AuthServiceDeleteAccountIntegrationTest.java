@@ -28,6 +28,7 @@ import com.socialcup.subscription.entity.Subscription;
 import com.socialcup.subscription.entity.SubscriptionStatus;
 import com.socialcup.subscription.repository.SubscriptionRepository;
 import com.socialcup.user.entity.Member;
+import com.socialcup.user.entity.MemberStatus;
 import com.socialcup.user.repository.MemberRepository;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
@@ -115,6 +116,7 @@ class AuthServiceDeleteAccountIntegrationTest {
         Member member = new Member();
         member.setEmail("ada-" + UUID.randomUUID() + "@example.com");
         member.setFirstName("Ada");
+        member.setStatus(MemberStatus.ACTIVE);
         member = memberRepository.saveAndFlush(member);
         if (credits > 0) {
             creditService.grantMonthlyCredits(member.getId(), "test-seed");
@@ -223,9 +225,14 @@ class AuthServiceDeleteAccountIntegrationTest {
 
         com.stripe.model.Subscription stripeSubscription = mock(com.stripe.model.Subscription.class);
         when(stripeSubscription.cancel()).thenReturn(stripeSubscription);
-        try (MockedStatic<com.stripe.model.Subscription> subStatic = mockStatic(com.stripe.model.Subscription.class)) {
+        com.stripe.model.Customer stripeCustomer = mock(com.stripe.model.Customer.class);
+        when(stripeCustomer.delete()).thenReturn(stripeCustomer);
+        try (MockedStatic<com.stripe.model.Subscription> subStatic = mockStatic(com.stripe.model.Subscription.class);
+             MockedStatic<com.stripe.model.Customer> customerStatic = mockStatic(com.stripe.model.Customer.class)) {
             subStatic.when(() -> com.stripe.model.Subscription.retrieve(stripeSubscriptionId))
                 .thenReturn(stripeSubscription);
+            customerStatic.when(() -> com.stripe.model.Customer.retrieve(stripeCustomerId))
+                .thenReturn(stripeCustomer);
 
             authService.deleteAccount(member.getId());
         }

@@ -1,10 +1,13 @@
 package com.socialcup.auth.controller;
 
 import com.socialcup.auth.dto.AuthResponse;
+import com.socialcup.auth.dto.ForgotPasswordRequest;
 import com.socialcup.auth.dto.LoginRequest;
 import com.socialcup.auth.dto.MemberDto;
 import com.socialcup.auth.dto.RefreshTokenRequest;
 import com.socialcup.auth.dto.RegisterRequest;
+import com.socialcup.auth.dto.ResetPasswordRequest;
+import com.socialcup.auth.dto.VerifyEmailRequest;
 import com.socialcup.auth.service.AuthService;
 import com.socialcup.security.CurrentUserResolver;
 import jakarta.validation.Valid;
@@ -63,5 +66,35 @@ public class AuthController {
         UUID memberId = CurrentUserResolver.requireMemberId(authentication);
         authService.deleteAccount(memberId);
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/verify-email")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<MemberDto> verifyEmail(Authentication authentication, @Valid @RequestBody VerifyEmailRequest request) {
+        UUID memberId = CurrentUserResolver.requireMemberId(authentication);
+        MemberDto member = authService.verifyEmail(memberId, request.code());
+        return ResponseEntity.ok(member);
+    }
+
+    @PostMapping("/resend-verification-email")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Void> resendVerificationEmail(Authentication authentication) {
+        UUID memberId = CurrentUserResolver.requireMemberId(authentication);
+        authService.resendVerificationEmail(memberId);
+        return ResponseEntity.noContent().build();
+    }
+
+    // Deliberately public (see SecurityConfig) - a member who forgot their
+    // password by definition cannot present a Bearer token.
+    @PostMapping("/forgot-password")
+    public ResponseEntity<Void> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
+        authService.forgotPassword(request.email());
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/reset-password")
+    public ResponseEntity<AuthResponse> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+        AuthResponse response = authService.resetPassword(request.email(), request.code(), request.newPassword());
+        return ResponseEntity.ok(response);
     }
 }

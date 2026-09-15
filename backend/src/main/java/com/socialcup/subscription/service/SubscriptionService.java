@@ -110,6 +110,9 @@ public class SubscriptionService {
     }
 
     public SubscriptionResponse cancel(UUID memberId) {
+        memberRepository.findByIdAndDeletedAtIsNull(memberId)
+            .orElseThrow(() -> new ResourceNotFoundException("Member not found with id: " + memberId));
+
         Subscription subscription = subscriptionRepository.findByMemberId(memberId)
             .orElseThrow(() -> new ResourceNotFoundException("No subscription found for this member"));
 
@@ -145,28 +148,61 @@ public class SubscriptionService {
     // two have different Stripe calls (cancel() vs update()) and different
     // local semantics (CANCELLED right away vs. cancelAtPeriodEnd first), and
     // this must never change cancel()'s existing voluntary-cancellation
-    // behavior. A missing or already-cancelled subscription is a silent
-    // no-op - account deletion must succeed whether or not the member ever
-    // subscribed.
+    // behavior. A missing subscription (never subscribed - no Stripe
+    // customer was ever created) is a silent no-op - account deletion must
+    // succeed whether or not the member ever subscribed. An ALREADY
+    // cancelled subscription is not skipped entirely though: their Stripe
+    // Customer record is still real and still live on Stripe's side, so it
+    // still needs deleteStripeCustomer below.
     public void cancelImmediatelyForAccountDeletion(UUID memberId) {
         Subscription subscription = subscriptionRepository.findByMemberId(memberId).orElse(null);
-        if (subscription == null || subscription.getStatus() == SubscriptionStatus.CANCELLED) {
+        if (subscription == null) {
             return;
         }
 
-        try {
-            com.stripe.model.Subscription.retrieve(subscription.getStripeSubscriptionId()).cancel();
-        } catch (StripeException e) {
-            throw new ConflictException("Unable to cancel subscription: " + e.getMessage());
+        if (subscription.getStatus() != SubscriptionStatus.CANCELLED) {
+            try {
+                com.stripe.model.Subscription.retrieve(subscription.getStripeSubscriptionId()).cancel();
+            } catch (StripeException e) {
+                throw new ConflictException("Unable to cancel subscription: " + e.getMessage());
+            }
+
+            subscription.setStatus(SubscriptionStatus.CANCELLED);
+            subscription.setCancelledAt(Instant.now());
+            subscriptionRepository.save(subscription);
         }
 
-        subscription.setStatus(SubscriptionStatus.CANCELLED);
-        subscription.setCancelledAt(Instant.now());
-        subscriptionRepository.save(subscription);
+        deleteStripeCustomer(subscription.getStripeCustomerId());
     }
 
+    // Permanently deletes the Customer object on Stripe's side - local
+    // anonymization (see AuthService.deleteAccount) only ever touched our
+    // own database, leaving the member's real email/name/saved card sitting
+    // on Stripe indefinitely otherwise. Stripe keeps the customer id as a
+    // tombstone (so past charges/invoices stay associated for accounting -
+    // matching this app's own "preserve historical financial records"
+    // deletion policy) but strips the live, retrievable record down to just
+    // {id, deleted: true}; it also immediately removes any saved card. This
+    // does NOT retroactively scrub the email Stripe already snapshotted onto
+    // past Invoice objects - Stripe has no standard API for that, only a
+    // support-mediated redaction process for full erasure of billing history.
+    private void deleteStripeCustomer(String stripeCustomerId) {
+        try {
+            Customer.retrieve(stripeCustomerId).delete();
+        } catch (StripeException e) {
+            throw new ConflictException("Unable to delete Stripe customer: " + e.getMessage());
+        }
+    }
+
+    // Without this, a deleted member's still-valid access token could keep
+    // reading their last-known subscription state via GET
+    // /users/me/subscription indefinitely - mirrors the same gap fixed in
+    // CreditService.getBalance.
     @Transactional(readOnly = true)
     public SubscriptionResponse getMySubscription(UUID memberId) {
+        memberRepository.findByIdAndDeletedAtIsNull(memberId)
+            .orElseThrow(() -> new ResourceNotFoundException("Member not found with id: " + memberId));
+
         Subscription subscription = subscriptionRepository.findByMemberId(memberId)
             .orElseThrow(() -> new ResourceNotFoundException("No subscription found for this member"));
         return SubscriptionResponse.fromEntity(subscription);

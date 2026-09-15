@@ -132,12 +132,8 @@
             <version>${stripe.version}</version>
         </dependency>
 
-        <!-- AWS SDK -->
-        <dependency>
-            <groupId>software.amazon.awssdk</groupId>
-            <artifactId>s3</artifactId>
-        </dependency>
-
+        <!-- AWS SDK (SES for transactional email only - photos moved off S3,
+             see PhotoStorageService) -->
         <dependency>
             <groupId>software.amazon.awssdk</groupId>
             <artifactId>ses</artifactId>

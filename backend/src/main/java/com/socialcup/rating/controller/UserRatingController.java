@@ -32,13 +32,13 @@ public class UserRatingController {
     }
 
     // The drink diary is the same DrinkRating data as /users/me/ratings - see
-    // RatingService.getRatingsForMember - presented as a chronological journal
-    // (newest first by default) rather than duplicated into a separate entity,
-    // table, or query. A caller can still request a different sort explicitly;
-    // this only changes the default when none is given.
+    // RatingService.getRatingsForMember - presented highest-rated-first per
+    // the PRD (Module 5.3), not duplicated into a separate entity, table, or
+    // query. A caller can still request a different sort explicitly; this
+    // only changes the default when none is given.
     @GetMapping("/diary")
     public ResponseEntity<PageResponse<RatingResponse>> getMyDiary(
-            @PageableDefault(sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable,
+            @PageableDefault(sort = "rating", direction = Sort.Direction.DESC) Pageable pageable,
             Authentication authentication) {
         UUID memberId = CurrentUserResolver.requireMemberId(authentication);
         return ResponseEntity.ok(ratingService.getRatingsForMember(memberId, pageable));

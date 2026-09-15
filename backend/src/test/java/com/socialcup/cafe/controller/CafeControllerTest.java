@@ -159,7 +159,7 @@ class CafeControllerTest {
     void getCafeDrinks_returns200() throws Exception {
         UUID cafeId = UUID.randomUUID();
         DrinkResponse drink = new DrinkResponse(
-            UUID.randomUUID(), cafeId, "Cafe Beta", "Espresso", "Coffee", "Shot", new BigDecimal("3.00"), 1, null, false, DrinkStatus.ACTIVE, Instant.now(), Instant.now()
+            UUID.randomUUID(), cafeId, "Cafe Beta", "Espresso", "Coffee", "Shot", new BigDecimal("3.00"), 1, null, false, DrinkStatus.ACTIVE, Instant.now(), Instant.now(), null, 0L
         );
         PageResponse<DrinkResponse> page = PageResponse.of(new PageImpl<>(List.of(drink), PageRequest.of(0, 10), 1));
 

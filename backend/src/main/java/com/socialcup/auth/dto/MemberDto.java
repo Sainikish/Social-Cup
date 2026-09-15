@@ -15,7 +15,8 @@ public record MemberDto(
     String avatarUrl,
     String status,
     List<String> roles,
-    Instant createdAt
+    Instant createdAt,
+    boolean emailVerified
 ) {
     public static MemberDto fromEntity(Member member) {
         return new MemberDto(
@@ -26,7 +27,8 @@ public record MemberDto(
             member.getAvatarUrl(),
             member.getStatus() != null ? member.getStatus().name() : null,
             List.of(member.getRole() != null ? member.getRole().name() : Roles.MEMBER),
-            member.getCreatedAt()
+            member.getCreatedAt(),
+            member.isEmailVerified()
         );
     }
 }

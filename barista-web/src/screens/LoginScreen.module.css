@@ -1,17 +1,91 @@
-.container {
+.page {
   min-height: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+}
+
+.heroPanel {
+  position: relative;
+  background-size: cover;
+  background-position: center;
+  display: flex;
+  align-items: flex-end;
+}
+
+.heroOverlay {
+  width: 100%;
+  padding: var(--spacing-xxl);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  background: linear-gradient(180deg, rgba(36, 24, 18, 0) 0%, rgba(36, 24, 18, 0.55) 100%);
+  box-sizing: border-box;
+}
+
+.heroBadge {
+  align-self: flex-start;
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-on-primary);
+  background: rgba(255, 255, 255, 0.18);
+  padding: var(--spacing-xs) var(--spacing-md);
+  border-radius: 999px;
+  backdrop-filter: blur(2px);
+}
+
+.heroTitle {
+  font-size: var(--font-size-xxl);
+  font-weight: 800;
+  color: var(--color-on-primary);
+  margin: 0;
+  max-width: 20ch;
+}
+
+.heroSubtitle {
+  font-size: var(--font-size-md);
+  color: rgba(255, 255, 255, 0.9);
+  margin: 0;
+  max-width: 34ch;
+}
+
+.formPanel {
   display: flex;
   align-items: center;
   justify-content: center;
   padding: var(--spacing-xl);
+  background: var(--color-background);
 }
 
-.form {
+.card {
   width: 100%;
   max-width: 420px;
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-md);
+  gap: var(--spacing-sm);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-xxl) var(--spacing-xl);
+  box-shadow: 0 24px 48px -24px rgba(36, 24, 18, 0.22);
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+.card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 32px 56px -20px rgba(36, 24, 18, 0.3);
+}
+
+.badge {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+  padding: var(--spacing-xs);
+  box-sizing: border-box;
+  margin-bottom: var(--spacing-sm);
 }
 
 .title {
@@ -27,8 +101,27 @@
   margin: 0 0 var(--spacing-sm);
 }
 
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
 .error {
   font-size: var(--font-size-sm);
   color: var(--color-danger);
   margin: 0;
+}
+
+/* Below this, the hero panel would be too cramped to read - the form
+   becomes the whole page instead, matching every other screen's existing
+   768px mobile breakpoint convention. */
+@media (max-width: 900px) {
+  .page {
+    grid-template-columns: 1fr;
+  }
+
+  .heroPanel {
+    display: none;
+  }
 }

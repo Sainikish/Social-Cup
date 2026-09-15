@@ -72,6 +72,7 @@ const AUTHENTICATED_USER: MemberDto = {
   status: 'ACTIVE',
   roles: ['MEMBER'],
   createdAt: new Date().toISOString(),
+  emailVerified: true,
 };
 
 function subscription(overrides: Partial<SubscriptionResponse> = {}): SubscriptionResponse {
@@ -113,6 +114,10 @@ beforeEach(() => {
     logout: jest.fn(),
     deleteAccount: jest.fn(),
     initializeAuth: jest.fn(),
+    verifyEmail: jest.fn(),
+    resendVerificationEmail: jest.fn(),
+    forgotPassword: jest.fn(),
+    resetPassword: jest.fn(),
   });
 });
 
@@ -278,6 +283,10 @@ describe('SubscriptionScreen', () => {
       logout: jest.fn(),
       deleteAccount: jest.fn(),
       initializeAuth: jest.fn(),
+      verifyEmail: jest.fn(),
+      resendVerificationEmail: jest.fn(),
+      forgotPassword: jest.fn(),
+      resetPassword: jest.fn(),
     });
 
     renderScreen();

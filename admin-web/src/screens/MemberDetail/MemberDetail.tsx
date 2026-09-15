@@ -2,10 +2,12 @@ import { useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 
 import { toApiError } from '../../api/client';
-import { Card, ErrorState } from '../../components';
+import { Card, ErrorState, LoadingState } from '../../components';
 import {
   MemberActionDialog,
   memberErrorMessage,
+  useMemberByIdQuery,
+  useMemberCreditBalanceQuery,
   useReactivateMemberMutation,
   useSuspendMemberMutation,
   type MemberAction,
@@ -17,14 +19,11 @@ interface MemberDetailLocationState {
   member?: MemberDto;
 }
 
-// There is no backend endpoint to look up a member by ID at all - not even
-// a public one (unlike Cafe/Drink, which at least have a public GET for a
-// "cold" load). The ONLY way this screen ever learns a member's actual data
-// is as the direct result of suspending or reactivating them, carried via
-// router state from a just-completed action or held in this screen's own
-// local state after one. Arriving here without ever having acted on this
-// member leaves everything about them genuinely unknown - this screen says
-// so plainly rather than fabricating a status or profile.
+// Two arrival paths, same convention as CafeDetail/DrinkDetail: "fresh" via
+// router state (right after a suspend/reactivate action, or a row click from
+// MemberLookup that already fetched the full page) or "cold" via
+// GET /admin/members/{id} - added alongside this screen, so a typed/bookmarked
+// URL or a page refresh no longer leaves this screen with nothing to show.
 export function MemberDetail() {
   const { memberId } = useParams<{ memberId: string }>();
   const location = useLocation();
@@ -36,6 +35,8 @@ export function MemberDetail() {
   const [pendingAction, setPendingAction] = useState<MemberAction | null>(null);
   const [actionError, setActionError] = useState<string | undefined>();
 
+  const memberQuery = useMemberByIdQuery(memberId, { skip: Boolean(latestMember) });
+  const creditQuery = useMemberCreditBalanceQuery(memberId);
   const suspendMutation = useSuspendMemberMutation();
   const reactivateMutation = useReactivateMemberMutation();
   const isSubmitting = suspendMutation.isPending || reactivateMutation.isPending;
@@ -44,9 +45,23 @@ export function MemberDetail() {
     return <ErrorState message="No member was specified." />;
   }
 
-  const knownStatus = latestMember?.status ?? null;
-  const showSuspendAction = !latestMember || latestMember.status !== 'SUSPENDED';
-  const showReactivateAction = !latestMember || latestMember.status === 'SUSPENDED';
+  if (!latestMember && memberQuery.isLoading) {
+    return <LoadingState label="Loading member…" />;
+  }
+
+  if (!latestMember && memberQuery.isError) {
+    return (
+      <ErrorState
+        message={memberErrorMessage(toApiError(memberQuery.error).code)}
+        onRetry={() => memberQuery.refetch()}
+      />
+    );
+  }
+
+  const member = latestMember ?? memberQuery.data;
+  const knownStatus = member?.status ?? null;
+  const showSuspendAction = !member || member.status !== 'SUSPENDED';
+  const showReactivateAction = !member || member.status === 'SUSPENDED';
 
   function requestAction(action: MemberAction) {
     setActionError(undefined);
@@ -85,45 +100,47 @@ export function MemberDetail() {
   return (
     <div className={styles.container}>
       <nav className={styles.breadcrumbs} aria-label="Breadcrumb">
-        <Link to="/members">Members</Link> <span aria-hidden="true">/</span> <span>{memberId}</span>
+        <Link to="/members">Members</Link> <span aria-hidden="true">/</span>{' '}
+        <span>{member?.email ?? memberId}</span>
       </nav>
 
       <header className={styles.header}>
-        <h1 className={styles.title}>Member {memberId}</h1>
-        {latestMember ? (
-          <span className={styles.statusBadge} data-status={latestMember.status ?? 'UNKNOWN'}>
-            {latestMember.status ?? 'Unknown'}
-          </span>
-        ) : (
-          <span className={styles.statusBadge} data-status="UNKNOWN">
-            Unknown
-          </span>
-        )}
+        <h1 className={styles.title}>{member?.email ?? `Member ${memberId}`}</h1>
+        <span className={styles.statusBadge} data-status={member?.status ?? 'UNKNOWN'}>
+          {member?.status ?? 'Unknown'}
+        </span>
       </header>
 
-      {latestMember ? (
+      {member ? (
         <Card className={styles.section}>
           <h2 className={styles.sectionTitle}>Details</h2>
           <dl className={styles.detailList}>
             <dt>Email</dt>
-            <dd>{latestMember.email}</dd>
+            <dd>{member.email}</dd>
             <dt>Name</dt>
-            <dd>{[latestMember.firstName, latestMember.lastName].filter(Boolean).join(' ') || 'Not provided'}</dd>
+            <dd>{[member.firstName, member.lastName].filter(Boolean).join(' ') || 'Not provided'}</dd>
             <dt>Roles</dt>
-            <dd>{latestMember.roles.join(', ')}</dd>
+            <dd>{member.roles.join(', ')}</dd>
+            <dt>Email verified</dt>
+            <dd>{member.emailVerified ? 'Yes' : 'No'}</dd>
             <dt>Member since</dt>
-            <dd>{new Date(latestMember.createdAt).toLocaleDateString()}</dd>
+            <dd>{new Date(member.createdAt).toLocaleDateString()}</dd>
           </dl>
         </Card>
-      ) : (
-        <Card className={styles.notice}>
+      ) : null}
+
+      <Card className={styles.section}>
+        <h2 className={styles.sectionTitle}>Credit Balance</h2>
+        {creditQuery.isLoading ? <p className={styles.noticeText}>Loading…</p> : null}
+        {creditQuery.isError ? (
           <p className={styles.noticeText}>
-            This member&apos;s details are not available - there is no backend endpoint to look up a member by ID.
-            Suspending or reactivating below will show the resulting record, since the backend returns it directly
-            from that action.
+            {memberErrorMessage(toApiError(creditQuery.error).code)}
           </p>
-        </Card>
-      )}
+        ) : null}
+        {creditQuery.isSuccess ? (
+          <p className={styles.noticeText}>{creditQuery.data.balance} credits</p>
+        ) : null}
+      </Card>
 
       <section className={styles.section}>
         <h2 className={styles.sectionTitle}>Actions</h2>

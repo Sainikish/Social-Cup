@@ -6,6 +6,9 @@ import com.socialcup.drink.entity.DrinkStatus;
 import java.math.BigDecimal;
 import java.util.UUID;
 
+// See DrinkResponse's own note: averageRating/ratingCount come from a
+// separate batched aggregate query, never from the entity itself, and
+// averageRating is null (not 0.0) whenever ratingCount is 0.
 public record DrinkSummaryResponse(
     UUID id,
     UUID cafeId,
@@ -15,9 +18,11 @@ public record DrinkSummaryResponse(
     int creditPrice,
     String photoUrl,
     boolean signature,
-    DrinkStatus status
+    DrinkStatus status,
+    Double averageRating,
+    long ratingCount
 ) {
-    public static DrinkSummaryResponse fromEntity(Drink drink) {
+    public static DrinkSummaryResponse fromEntity(Drink drink, Double averageRating, long ratingCount) {
         return new DrinkSummaryResponse(
             drink.getId(),
             drink.getCafe() != null ? drink.getCafe().getId() : null,
@@ -27,7 +32,9 @@ public record DrinkSummaryResponse(
             drink.getCreditPrice(),
             drink.getPhotoUrl(),
             drink.isSignature(),
-            drink.getStatus()
+            drink.getStatus(),
+            averageRating,
+            ratingCount
         );
     }
 }

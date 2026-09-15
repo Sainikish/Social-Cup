@@ -29,8 +29,14 @@ public class CreditService {
         this.memberRepository = memberRepository;
     }
 
+    // Every other method below already gates on findByIdAndDeletedAtIsNull -
+    // this one was the one gap: without it, a deleted member's still-valid
+    // (not-yet-expired) access token could keep reading their old balance
+    // via GET /users/me/credits indefinitely.
     @Transactional(readOnly = true)
     public long getBalance(UUID memberId) {
+        memberRepository.findByIdAndDeletedAtIsNull(memberId)
+            .orElseThrow(() -> new ResourceNotFoundException("Member not found with id: " + memberId));
         return currentBalance(memberId);
     }
 

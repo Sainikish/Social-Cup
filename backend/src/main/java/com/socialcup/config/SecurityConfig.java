@@ -34,6 +34,11 @@ public class SecurityConfig {
         "/auth/register",
         "/auth/login",
         "/auth/refresh",
+        // Both are unauthenticated by definition - a member who forgot
+        // their password cannot present a Bearer token to prove who they
+        // are, that's the entire reason this flow exists.
+        "/auth/forgot-password",
+        "/auth/reset-password",
         // A cafe terminal has no prior Bearer token to present when its
         // access token has expired, same reason /auth/refresh above is
         // public rather than gated - the refresh token in the request body
@@ -55,7 +60,11 @@ public class SecurityConfig {
         "/cafes",
         "/cafes/**",
         "/drinks",
-        "/drinks/**"
+        "/drinks/**",
+        // Photo bytes stored in Postgres (see PhotoStorageService) and
+        // streamed back here - a plain <img>/<Image> request carries no
+        // Authorization header, same as a public S3 URL would have.
+        "/photos/**"
     };
 
     private final CorsProperties corsProperties;

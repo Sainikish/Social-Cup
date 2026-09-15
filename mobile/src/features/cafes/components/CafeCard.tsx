@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Card, FallbackImage } from '../../../components';
+import { RatingSummaryBadge } from '../../ratings';
 import { colors, fontSize, fontWeight, radius, spacing } from '../../../theme';
 import type { CafeSummaryResponse } from '../types';
 
@@ -31,9 +32,12 @@ export function CafeCard({ cafe, onPress }: CafeCardProps) {
         </View>
 
         <View style={styles.body}>
-          <Text style={styles.name} numberOfLines={1}>
-            {cafe.name}
-          </Text>
+          <View style={styles.nameRow}>
+            <Text style={styles.name} numberOfLines={1}>
+              {cafe.name}
+            </Text>
+            <RatingSummaryBadge averageRating={cafe.averageRating} ratingCount={cafe.ratingCount} />
+          </View>
           {location ? (
             <Text style={styles.location} numberOfLines={1}>
               {location}
@@ -92,7 +96,14 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     gap: spacing.xs,
   },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
   name: {
+    flexShrink: 1,
     fontSize: fontSize.lg,
     fontWeight: fontWeight.semibold,
     color: colors.textPrimary,

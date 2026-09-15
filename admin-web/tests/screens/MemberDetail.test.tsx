@@ -4,7 +4,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 
 import { useAuth } from '../../src/auth/AuthContext';
 import type { AdminUser, AuthContextValue } from '../../src/auth/types';
-import { reactivateMember, suspendMember } from '../../src/features/members/api';
+import { getMemberById, getMemberCreditBalance, reactivateMember, suspendMember } from '../../src/features/members/api';
 import type { MemberDto } from '../../src/features/members/types';
 import { AppRouter } from '../../src/routes/AppRouter';
 import { MemberDetail } from '../../src/screens/MemberDetail/MemberDetail';
@@ -17,6 +17,8 @@ vi.mock('../../src/auth/AuthContext', async () => {
 
 const mockSuspendMember = vi.mocked(suspendMember);
 const mockReactivateMember = vi.mocked(reactivateMember);
+const mockGetMemberById = vi.mocked(getMemberById);
+const mockGetMemberCreditBalance = vi.mocked(getMemberCreditBalance);
 const mockUseAuth = vi.mocked(useAuth);
 
 function adminUser(overrides: Partial<AdminUser> = {}): AdminUser {
@@ -54,6 +56,7 @@ const ACTIVE_MEMBER: MemberDto = {
   status: 'ACTIVE',
   roles: ['MEMBER'],
   createdAt: '2026-01-01T00:00:00Z',
+  emailVerified: true,
 };
 
 function renderCold() {
@@ -84,40 +87,54 @@ function renderWithState(member: MemberDto) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Credit balance is fetched unconditionally regardless of arrival path
+  // (unlike the member itself, it's never carried via router state) - a
+  // safe default so tests that don't care about it never hang or error.
+  mockGetMemberCreditBalance.mockResolvedValue({ balance: 0 });
 });
 
-describe('MemberDetail - cold arrival (no lookup endpoint exists)', () => {
-  it('states plainly that member details are unavailable, with an Unknown status badge', () => {
+describe('MemberDetail - cold arrival (via GET /admin/members/{id})', () => {
+  it('shows a loading state, then the member once loaded', async () => {
+    mockGetMemberById.mockResolvedValue(ACTIVE_MEMBER);
     renderCold();
 
-    expect(screen.getByText('Member member-1', { selector: 'h1' })).toBeInTheDocument();
-    expect(screen.getByText('Unknown', { selector: 'span' })).toBeInTheDocument();
-    expect(screen.getByText(/no backend endpoint to look up a member by ID/i)).toBeInTheDocument();
+    expect(screen.getByText('Loading member…')).toBeInTheDocument();
+
+    expect(await screen.findByText('grace@example.com', { selector: 'h1' })).toBeInTheDocument();
+    expect(screen.getByText('Grace Hopper')).toBeInTheDocument();
+    expect(screen.getByText('ACTIVE', { selector: 'span' })).toBeInTheDocument();
   });
 
-  it('offers both Suspend and Reactivate actions when status is unknown', () => {
+  it('shows an error state with retry when the lookup fails', async () => {
+    mockGetMemberById.mockRejectedValue({
+      isAxiosError: true,
+      response: { status: 404, data: { code: 'RESOURCE_NOT_FOUND', message: 'not found' } },
+      toJSON: () => ({}),
+    });
     renderCold();
 
-    expect(screen.getByText('Suspend Member')).toBeInTheDocument();
-    expect(screen.getByText('Reactivate Member')).toBeInTheDocument();
+    expect(await screen.findByText('No member exists with this ID.')).toBeInTheDocument();
   });
 
-  it('never calls the suspend/reactivate API just from loading the screen', () => {
+  it('never calls the suspend/reactivate API just from loading the screen', async () => {
+    mockGetMemberById.mockResolvedValue(ACTIVE_MEMBER);
     renderCold();
 
+    await screen.findByText('grace@example.com', { selector: 'h1' });
     expect(mockSuspendMember).not.toHaveBeenCalled();
     expect(mockReactivateMember).not.toHaveBeenCalled();
   });
 });
 
 describe('MemberDetail - fresh arrival (member carried via navigation state)', () => {
-  it('shows the member details and only the valid action for the known status', () => {
+  it('does not call getMemberById, and shows the member details with only the valid action', () => {
     renderWithState(ACTIVE_MEMBER);
 
-    expect(screen.getByText('grace@example.com')).toBeInTheDocument();
+    expect(screen.getByText('grace@example.com', { selector: 'h1' })).toBeInTheDocument();
     expect(screen.getByText('Grace Hopper')).toBeInTheDocument();
     expect(screen.getByText('Suspend Member')).toBeInTheDocument();
     expect(screen.queryByText('Reactivate Member')).not.toBeInTheDocument();
+    expect(mockGetMemberById).not.toHaveBeenCalled();
   });
 
   it('shows only Reactivate for a suspended member', () => {
@@ -125,6 +142,27 @@ describe('MemberDetail - fresh arrival (member carried via navigation state)', (
 
     expect(screen.getByText('Reactivate Member')).toBeInTheDocument();
     expect(screen.queryByText('Suspend Member')).not.toBeInTheDocument();
+  });
+});
+
+describe('MemberDetail - credit balance', () => {
+  it('shows the credit balance once loaded', async () => {
+    mockGetMemberCreditBalance.mockResolvedValue({ balance: 26 });
+    renderWithState(ACTIVE_MEMBER);
+
+    expect(await screen.findByText('26 credits')).toBeInTheDocument();
+    expect(mockGetMemberCreditBalance).toHaveBeenCalledWith('member-1');
+  });
+
+  it('shows an error message when the credit lookup fails', async () => {
+    mockGetMemberCreditBalance.mockRejectedValue({
+      isAxiosError: true,
+      response: { status: 500, data: { code: 'INTERNAL_ERROR', message: 'boom' } },
+      toJSON: () => ({}),
+    });
+    renderWithState(ACTIVE_MEMBER);
+
+    expect(await screen.findByText('Something went wrong. Please try again.')).toBeInTheDocument();
   });
 });
 
@@ -367,12 +405,13 @@ describe('MemberDetail - route protection for /members and /members/:memberId', 
     expect(screen.getByLabelText('Email')).toBeInTheDocument();
   });
 
-  it('lets an ADMIN reach /members/:memberId', () => {
+  it('lets an ADMIN reach /members/:memberId', async () => {
     mockUseAuth.mockReturnValue(authValue({ isAuthenticated: true, user: adminUser() }));
+    mockGetMemberById.mockResolvedValue(ACTIVE_MEMBER);
 
     renderRouteAt('/members/member-1');
 
-    expect(screen.getByText('Member member-1', { selector: 'h1' })).toBeInTheDocument();
+    expect(await screen.findByText('grace@example.com', { selector: 'h1' })).toBeInTheDocument();
     expect(mockSuspendMember).not.toHaveBeenCalled();
     expect(mockReactivateMember).not.toHaveBeenCalled();
   });
@@ -383,7 +422,7 @@ describe('MemberDetail - route protection for /members and /members/:memberId', 
     renderRouteAt('/members/member-1');
 
     expect(screen.getByLabelText('Email')).toBeInTheDocument();
-    expect(screen.queryByText('Member member-1', { selector: 'h1' })).not.toBeInTheDocument();
+    expect(screen.queryByText('grace@example.com', { selector: 'h1' })).not.toBeInTheDocument();
   });
 
   it('redirects an anonymous user away from /members/:memberId to /login', () => {

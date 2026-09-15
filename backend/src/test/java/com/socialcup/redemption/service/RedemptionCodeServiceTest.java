@@ -15,6 +15,7 @@ import com.socialcup.redemption.dto.RedemptionCodeResponse;
 import com.socialcup.redemption.entity.RedemptionCode;
 import com.socialcup.redemption.repository.RedemptionCodeRepository;
 import com.socialcup.user.entity.Member;
+import com.socialcup.user.entity.MemberStatus;
 import com.socialcup.user.repository.MemberRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -71,6 +72,7 @@ class RedemptionCodeServiceTest {
         Member member = new Member();
         member.setId(id);
         member.setEmail("ada@example.com");
+        member.setStatus(MemberStatus.ACTIVE);
         return member;
     }
 
@@ -255,6 +257,48 @@ class RedemptionCodeServiceTest {
             .isInstanceOf(ResourceNotFoundException.class);
 
         verify(redemptionCodeRepository, never()).save(any());
+    }
+
+    @Test
+    void generateCode_forCancelledMember_throwsConflict_beforeEvenLookingUpTheDrink() {
+        Member cancelledMember = newMember(MEMBER_ID);
+        cancelledMember.setStatus(MemberStatus.CANCELLED);
+        when(memberRepository.findByIdAndDeletedAtIsNull(MEMBER_ID)).thenReturn(Optional.of(cancelledMember));
+
+        assertThatThrownBy(() -> redemptionCodeService.generateCode(MEMBER_ID, new CreateRedemptionCodeRequest(DRINK_ID)))
+            .isInstanceOf(ConflictException.class)
+            .hasMessageContaining("not active");
+
+        verify(drinkRepository, never()).findByIdAndArchivedAtIsNull(any());
+        verify(redemptionCodeRepository, never()).save(any());
+    }
+
+    @Test
+    void generateCode_forSuspendedMember_throwsConflict() {
+        Member suspendedMember = newMember(MEMBER_ID);
+        suspendedMember.setStatus(MemberStatus.SUSPENDED);
+        when(memberRepository.findByIdAndDeletedAtIsNull(MEMBER_ID)).thenReturn(Optional.of(suspendedMember));
+
+        assertThatThrownBy(() -> redemptionCodeService.generateCode(MEMBER_ID, new CreateRedemptionCodeRequest(DRINK_ID)))
+            .isInstanceOf(ConflictException.class);
+
+        verify(redemptionCodeRepository, never()).save(any());
+    }
+
+    @Test
+    void generateCode_forVisitorNeverSubscribed_throwsConflict_notInsufficientCredits() {
+        // A Visitor would also fail the balance check (0 credits), but the
+        // membership check must be what actually stops them - this is the
+        // whole reason a member with a *leftover* nonzero balance from a
+        // since-cancelled subscription can't keep spending it either.
+        Member visitor = newMember(MEMBER_ID);
+        visitor.setStatus(MemberStatus.VISITOR);
+        when(memberRepository.findByIdAndDeletedAtIsNull(MEMBER_ID)).thenReturn(Optional.of(visitor));
+
+        assertThatThrownBy(() -> redemptionCodeService.generateCode(MEMBER_ID, new CreateRedemptionCodeRequest(DRINK_ID)))
+            .isInstanceOf(ConflictException.class);
+
+        verify(creditService, never()).getBalance(any());
     }
 
     // ---- Drink validity ----

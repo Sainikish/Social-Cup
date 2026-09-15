@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen } from '@testing-library/react-native';
+import { Linking, Platform } from 'react-native';
 
 import CafeDetailScreen from '../../app/(app)/cafes/[id]';
 import * as cafesApi from '../../src/features/cafes/api';
@@ -209,5 +210,51 @@ describe('CafeDetailScreen', () => {
     fireEvent.press(row);
 
     expect(mockPush).toHaveBeenCalledWith('/(app)/drinks/d1');
+  });
+
+  describe('Get Directions', () => {
+    const originalPlatformOS = Platform.OS;
+
+    afterEach(() => {
+      Platform.OS = originalPlatformOS;
+    });
+
+    it('opens Apple Maps with coordinates on iOS', async () => {
+      Platform.OS = 'ios';
+      const openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
+      mockGetCafeById.mockResolvedValue(fullCafeDetail());
+      mockGetCafeDrinks.mockResolvedValue(drinksPage([]));
+
+      renderScreen();
+      fireEvent.press(await screen.findByLabelText('Get directions to Blue Bottle Coffee'));
+
+      expect(openURL).toHaveBeenCalledWith('http://maps.apple.com/?daddr=40.7128,-74.006');
+    });
+
+    it('opens Google Maps with coordinates on Android', async () => {
+      Platform.OS = 'android';
+      const openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
+      mockGetCafeById.mockResolvedValue(fullCafeDetail());
+      mockGetCafeDrinks.mockResolvedValue(drinksPage([]));
+
+      renderScreen();
+      fireEvent.press(await screen.findByLabelText('Get directions to Blue Bottle Coffee'));
+
+      expect(openURL).toHaveBeenCalledWith(
+        'https://www.google.com/maps/dir/?api=1&destination=40.7128,-74.006'
+      );
+    });
+
+    it('falls back to the address when the cafe has no coordinates', async () => {
+      Platform.OS = 'ios';
+      const openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
+      mockGetCafeById.mockResolvedValue(minimalCafeDetail());
+      mockGetCafeDrinks.mockResolvedValue(drinksPage([]));
+
+      renderScreen();
+      fireEvent.press(await screen.findByLabelText('Get directions to Minimal Cafe'));
+
+      expect(openURL).toHaveBeenCalledWith(`http://maps.apple.com/?daddr=${encodeURIComponent('1 Side St')}`);
+    });
   });
 });

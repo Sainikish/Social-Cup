@@ -1,7 +1,14 @@
-export { reactivateMember, suspendMember } from './api';
+export { getMemberById, getMemberCreditBalance, reactivateMember, searchMembers, suspendMember } from './api';
+export type { MemberSearchParams } from './api';
 export { MemberActionDialog } from './components/MemberActionDialog';
 export type { MemberAction, MemberActionDialogProps } from './components/MemberActionDialog';
 export { memberErrorMessage } from './errorMessages';
-export { useReactivateMemberMutation, useSuspendMemberMutation } from './hooks';
+export {
+  useMemberByIdQuery,
+  useMemberCreditBalanceQuery,
+  useMemberSearchQuery,
+  useReactivateMemberMutation,
+  useSuspendMemberMutation,
+} from './hooks';
 export { memberKeys } from './queryKeys';
-export type { MemberDto, MemberStatus } from './types';
+export type { CreditBalanceResponse, MemberDto, MemberStatus } from './types';

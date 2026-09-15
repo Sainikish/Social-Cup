@@ -6,6 +6,7 @@ import { renderRouter, screen, waitFor } from 'expo-router/testing-library';
 import * as authApi from '../../src/api/auth';
 import * as cafesApi from '../../src/features/cafes/api';
 import * as creditsApi from '../../src/features/credits/api';
+import * as drinksApi from '../../src/features/drinks/api';
 import * as subscriptionApi from '../../src/features/subscription/api';
 import { getAccessToken, getRefreshToken } from '../../src/storage/authStorage';
 import type { MemberDto } from '../../src/types/auth';
@@ -14,6 +15,7 @@ jest.mock('../../src/api/auth');
 jest.mock('../../src/storage/authStorage');
 jest.mock('../../src/features/cafes/api');
 jest.mock('../../src/features/credits/api');
+jest.mock('../../src/features/drinks/api');
 jest.mock('../../src/features/subscription/api');
 
 const mockGetAccessToken = getAccessToken as jest.MockedFunction<typeof getAccessToken>;
@@ -21,6 +23,9 @@ const mockGetRefreshToken = getRefreshToken as jest.MockedFunction<typeof getRef
 const mockGetCurrentUser = authApi.getCurrentUser as jest.MockedFunction<typeof authApi.getCurrentUser>;
 const mockGetFeaturedCafes = cafesApi.getFeaturedCafes as jest.MockedFunction<
   typeof cafesApi.getFeaturedCafes
+>;
+const mockGetSignatureDrinks = drinksApi.getSignatureDrinks as jest.MockedFunction<
+  typeof drinksApi.getSignatureDrinks
 >;
 const mockGetMyCreditBalance = creditsApi.getMyCreditBalance as jest.MockedFunction<
   typeof creditsApi.getMyCreditBalance
@@ -38,6 +43,7 @@ const SAMPLE_USER: MemberDto = {
   status: 'ACTIVE',
   roles: ['MEMBER'],
   createdAt: new Date().toISOString(),
+  emailVerified: true,
 };
 
 const APP_DIR = path.join(__dirname, '..', '..', 'app');
@@ -47,6 +53,19 @@ beforeEach(() => {
   // real (Phase 7.3) - this must never depend on a live backend, so it's
   // mocked here just like the auth modules already are.
   mockGetFeaturedCafes.mockResolvedValue({
+    content: [],
+    page: 0,
+    size: 20,
+    totalElements: 0,
+    totalPages: 0,
+    first: true,
+    last: true,
+    empty: true,
+  });
+  // Home also now fetches the signature-drinks strip - same reasoning as
+  // featured cafes above, stubbed to an empty page so it never depends on a
+  // live backend either.
+  mockGetSignatureDrinks.mockResolvedValue({
     content: [],
     page: 0,
     size: 20,

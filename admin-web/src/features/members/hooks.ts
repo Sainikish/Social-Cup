@@ -1,7 +1,31 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { reactivateMember, suspendMember } from './api';
+import { getMemberById, getMemberCreditBalance, reactivateMember, searchMembers, suspendMember } from './api';
 import { memberKeys } from './queryKeys';
+import type { MemberSearchParams } from './api';
+
+export function useMemberSearchQuery(params: MemberSearchParams) {
+  return useQuery({
+    queryKey: memberKeys.search(params),
+    queryFn: () => searchMembers(params),
+  });
+}
+
+export function useMemberByIdQuery(memberId: string | undefined, options: { skip?: boolean } = {}) {
+  return useQuery({
+    queryKey: memberKeys.detail(memberId ?? ''),
+    queryFn: () => getMemberById(memberId as string),
+    enabled: Boolean(memberId) && !options.skip,
+  });
+}
+
+export function useMemberCreditBalanceQuery(memberId: string | undefined) {
+  return useQuery({
+    queryKey: memberKeys.credits(memberId ?? ''),
+    queryFn: () => getMemberCreditBalance(memberId as string),
+    enabled: Boolean(memberId),
+  });
+}
 
 export function useSuspendMemberMutation() {
   const queryClient = useQueryClient();

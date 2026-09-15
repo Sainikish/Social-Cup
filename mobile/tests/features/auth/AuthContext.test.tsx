@@ -31,6 +31,7 @@ const SAMPLE_USER: MemberDto = {
   status: 'ACTIVE',
   roles: ['MEMBER'],
   createdAt: new Date().toISOString(),
+  emailVerified: true,
 };
 
 function authResponse(): AuthResponse {

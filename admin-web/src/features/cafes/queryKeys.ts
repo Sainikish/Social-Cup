@@ -1,9 +1,8 @@
-// There is deliberately no `list`/`all` key backed by a real query - no
-// admin cafe listing endpoint exists to back one. `all` exists only as an
-// invalidation root so a mutation can invalidate every cached search/detail
-// result without enumerating them individually.
+import type { CafeAdminSearchParams } from './api';
+
 export const cafeKeys = {
   all: ['cafes'] as const,
   search: (query: string) => [...cafeKeys.all, 'search', query] as const,
-  publicDetail: (id: string) => [...cafeKeys.all, 'publicDetail', id] as const,
+  adminSearch: (params: CafeAdminSearchParams) => [...cafeKeys.all, 'adminSearch', params] as const,
+  detail: (id: string) => [...cafeKeys.all, 'detail', id] as const,
 };

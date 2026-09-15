@@ -121,3 +121,18 @@ export type UpdateCafeRequest = CreateCafeRequest;
 export interface UpdateCafeStatusRequest {
   status: CafeStatus;
 }
+
+// NOT yet backed by a real backend endpoint - there is no admin-facing
+// PIN route on AdminCafeController today, only the barista-side CafePin
+// entity/BaristaAuthService used by barista login. This is the contract
+// this app's "Barista Access" section (see CafeDetail.tsx and
+// resetCafePin in ./api) is built against for
+// `POST /admin/cafes/{id}/pin/reset`: it upserts (creates a PIN if the
+// cafe has none yet, otherwise resets the existing one) and returns the
+// new PIN in PLAINTEXT, exactly once - the backend never persists or
+// re-returns the plaintext value again after this response, matching how
+// CafePin.pinHash only ever stores a bcrypt hash. Adding this endpoint is
+// tracked as separate backend work.
+export interface AdminCafePinResetResponse {
+  pin: string;
+}

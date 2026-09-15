@@ -1,14 +1,27 @@
 import { apiClient, AUTH_REFRESH_PATH } from './client';
-import type { AuthResponse, LoginRequest, MemberDto, RefreshRequest, RegisterRequest } from '../types/auth';
+import type {
+  AuthResponse,
+  ForgotPasswordRequest,
+  LoginRequest,
+  MemberDto,
+  RefreshRequest,
+  RegisterRequest,
+  ResetPasswordRequest,
+  VerifyEmailRequest,
+} from '../types/auth';
 
 const AUTH_LOGIN_PATH = '/auth/login';
 const AUTH_REGISTER_PATH = '/auth/register';
 const AUTH_ME_PATH = '/auth/me';
+const AUTH_VERIFY_EMAIL_PATH = '/auth/verify-email';
+const AUTH_RESEND_VERIFICATION_EMAIL_PATH = '/auth/resend-verification-email';
+const AUTH_FORGOT_PASSWORD_PATH = '/auth/forgot-password';
+const AUTH_RESET_PASSWORD_PATH = '/auth/reset-password';
 
-// Thin wrappers around the four existing backend auth endpoints - no
-// business logic lives here (that belongs to AuthContext), just the request
-// shape. Kept separate from src/api/client.ts so that module can stay a
-// generic, endpoint-agnostic Axios instance.
+// Thin wrappers around the existing backend auth endpoints - no business
+// logic lives here (that belongs to AuthContext), just the request shape.
+// Kept separate from src/api/client.ts so that module can stay a generic,
+// endpoint-agnostic Axios instance.
 export async function login(request: LoginRequest): Promise<AuthResponse> {
   const response = await apiClient.post<AuthResponse>(AUTH_LOGIN_PATH, request);
   return response.data;
@@ -33,4 +46,22 @@ export async function getCurrentUser(): Promise<MemberDto> {
 // response, so this resolves to void rather than an empty object.
 export async function deleteAccount(): Promise<void> {
   await apiClient.delete(AUTH_ME_PATH);
+}
+
+export async function verifyEmail(request: VerifyEmailRequest): Promise<MemberDto> {
+  const response = await apiClient.post<MemberDto>(AUTH_VERIFY_EMAIL_PATH, request);
+  return response.data;
+}
+
+export async function resendVerificationEmail(): Promise<void> {
+  await apiClient.post(AUTH_RESEND_VERIFICATION_EMAIL_PATH);
+}
+
+export async function forgotPassword(request: ForgotPasswordRequest): Promise<void> {
+  await apiClient.post(AUTH_FORGOT_PASSWORD_PATH, request);
+}
+
+export async function resetPassword(request: ResetPasswordRequest): Promise<AuthResponse> {
+  const response = await apiClient.post<AuthResponse>(AUTH_RESET_PASSWORD_PATH, request);
+  return response.data;
 }

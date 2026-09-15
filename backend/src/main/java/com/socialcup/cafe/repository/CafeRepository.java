@@ -73,4 +73,22 @@ public interface CafeRepository extends JpaRepository<Cafe, UUID> {
         @Param("status") CafeStatus status,
         Pageable pageable
     );
+
+    // Admin search: unlike searchCafes above, deliberately has NO
+    // "AND c.archivedAt IS NULL" clause - an admin must be able to find and
+    // review an archived cafe (e.g. to reactivate it via updateCafeStatus),
+    // not just an active one. status is an optional exact filter; a null
+    // value returns cafes of every status, archived included.
+    @Query("""
+        SELECT c FROM Cafe c
+        WHERE (:status IS NULL OR c.status = :status)
+          AND (:searchQuery IS NULL
+               OR LOWER(c.name) LIKE LOWER(CONCAT('%', CAST(:searchQuery AS string), '%'))
+               OR LOWER(c.address) LIKE LOWER(CONCAT('%', CAST(:searchQuery AS string), '%')))
+        """)
+    Page<Cafe> searchCafesForAdmin(
+        @Param("searchQuery") String searchQuery,
+        @Param("status") CafeStatus status,
+        Pageable pageable
+    );
 }

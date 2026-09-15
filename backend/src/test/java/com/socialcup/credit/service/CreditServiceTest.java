@@ -55,6 +55,7 @@ class CreditServiceTest {
 
     @Test
     void getBalance_withNoLedgerEntries_returnsZero() {
+        when(memberRepository.findByIdAndDeletedAtIsNull(MEMBER_ID)).thenReturn(Optional.of(newMember(MEMBER_ID)));
         when(creditLedgerRepository.sumAmountByMemberId(MEMBER_ID)).thenReturn(0L);
 
         assertThat(creditService.getBalance(MEMBER_ID)).isZero();
@@ -64,6 +65,7 @@ class CreditServiceTest {
     void getBalance_whenRepositoryReturnsNull_stillReturnsZeroNotNull() {
         // Defensive: COALESCE in the repository query should already prevent
         // this, but getBalance must never surface a null/NPE regardless.
+        when(memberRepository.findByIdAndDeletedAtIsNull(MEMBER_ID)).thenReturn(Optional.of(newMember(MEMBER_ID)));
         when(creditLedgerRepository.sumAmountByMemberId(MEMBER_ID)).thenReturn(null);
 
         assertThat(creditService.getBalance(MEMBER_ID)).isZero();
@@ -71,6 +73,7 @@ class CreditServiceTest {
 
     @Test
     void getBalance_reflectsAPositiveGrant() {
+        when(memberRepository.findByIdAndDeletedAtIsNull(MEMBER_ID)).thenReturn(Optional.of(newMember(MEMBER_ID)));
         when(creditLedgerRepository.sumAmountByMemberId(MEMBER_ID)).thenReturn(30L);
 
         assertThat(creditService.getBalance(MEMBER_ID)).isEqualTo(30L);
@@ -79,9 +82,24 @@ class CreditServiceTest {
     @Test
     void getBalance_reflectsTheSumOfMultipleLedgerEntries() {
         // 30 (grant) - 4 (redemption) + 4 (reversal) - 2 (redemption) = 28
+        when(memberRepository.findByIdAndDeletedAtIsNull(MEMBER_ID)).thenReturn(Optional.of(newMember(MEMBER_ID)));
         when(creditLedgerRepository.sumAmountByMemberId(MEMBER_ID)).thenReturn(28L);
 
         assertThat(creditService.getBalance(MEMBER_ID)).isEqualTo(28L);
+    }
+
+    // A deleted (or never-existed) member's still-valid access token must
+    // not be able to keep reading their old balance via GET
+    // /users/me/credits - see AdminMemberService.getCreditBalance for the
+    // admin-facing sibling of this same check.
+    @Test
+    void getBalance_forDeletedMember_throwsResourceNotFound_andNeverSumsTheLedger() {
+        when(memberRepository.findByIdAndDeletedAtIsNull(MEMBER_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> creditService.getBalance(MEMBER_ID))
+            .isInstanceOf(ResourceNotFoundException.class);
+
+        verify(creditLedgerRepository, never()).sumAmountByMemberId(any());
     }
 
     @Test
@@ -105,6 +123,7 @@ class CreditServiceTest {
         // amounts. A positive VOID_REVERSAL contributes to the balance
         // exactly like a MONTHLY_GRANT would: e.g. 10 (grant) - 4
         // (redemption) + 4 (reversal of that redemption) = 10.
+        when(memberRepository.findByIdAndDeletedAtIsNull(MEMBER_ID)).thenReturn(Optional.of(newMember(MEMBER_ID)));
         when(creditLedgerRepository.sumAmountByMemberId(MEMBER_ID)).thenReturn(10L);
 
         assertThat(creditService.getBalance(MEMBER_ID)).isEqualTo(10L);
@@ -116,6 +135,7 @@ class CreditServiceTest {
     void deductForRedemption_withInsufficientBalance_throwsAndCreatesNoLedgerEntry() {
         Member member = newMember(MEMBER_ID);
         when(memberRepository.findByIdAndDeletedAtIsNullForUpdate(MEMBER_ID)).thenReturn(Optional.of(member));
+        when(memberRepository.findByIdAndDeletedAtIsNull(MEMBER_ID)).thenReturn(Optional.of(member));
         when(creditLedgerRepository.sumAmountByMemberId(MEMBER_ID)).thenReturn(5L);
 
         assertThatThrownBy(() -> creditService.deductForRedemption(MEMBER_ID, 6, "redemption-1"))

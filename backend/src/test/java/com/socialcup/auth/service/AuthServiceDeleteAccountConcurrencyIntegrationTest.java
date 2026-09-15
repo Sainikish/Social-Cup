@@ -15,6 +15,7 @@ import com.socialcup.redemption.repository.RedemptionRepository;
 import com.socialcup.redemption.service.RedemptionCodeService;
 import com.socialcup.redemption.service.RedemptionService;
 import com.socialcup.user.entity.Member;
+import com.socialcup.user.entity.MemberStatus;
 import com.socialcup.user.repository.MemberRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -101,6 +102,7 @@ class AuthServiceDeleteAccountConcurrencyIntegrationTest {
         Member member = new Member();
         member.setEmail("ada-" + UUID.randomUUID() + "@example.com");
         member.setFirstName("Ada");
+        member.setStatus(MemberStatus.ACTIVE);
         member = memberRepository.saveAndFlush(member);
         creditService.grantMonthlyCredits(member.getId(), "test-seed");
 

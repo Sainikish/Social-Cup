@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState, type ChangeEvent } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 
 import { toApiError } from '../../api/client';
@@ -12,6 +12,7 @@ import {
   usePublicDrinkDetailQuery,
   useUpdateDrinkMutation,
   useUpdateDrinkStatusMutation,
+  useUploadDrinkPhotoMutation,
   validateDrinkForm,
   type DrinkFormValues,
   type DrinkResponse,
@@ -53,10 +54,13 @@ export function DrinkDetail() {
   const [pendingStatus, setPendingStatus] = useState<DrinkStatus | null>(null);
   const [statusError, setStatusError] = useState<string | undefined>();
   const [statusSucceeded, setStatusSucceeded] = useState(false);
+  const [photoError, setPhotoError] = useState<string | undefined>();
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
   const publicDetailQuery = usePublicDrinkDetailQuery(drinkId, { skip: Boolean(latestDrink) });
   const updateMutation = useUpdateDrinkMutation();
   const statusMutation = useUpdateDrinkStatusMutation();
+  const uploadPhotoMutation = useUploadDrinkPhotoMutation();
 
   if (!drinkId) {
     return <ErrorState message="No drink was specified." />;
@@ -143,6 +147,25 @@ export function DrinkDetail() {
     setStatusError(undefined);
   }
 
+  function handlePhotoSelected(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    // Always clear the input's own value, success or failure - otherwise
+    // selecting the exact same file again wouldn't re-fire onChange.
+    event.target.value = '';
+    if (!file) {
+      return;
+    }
+
+    setPhotoError(undefined);
+    uploadPhotoMutation.mutate(
+      { id: drinkId!, file },
+      {
+        onSuccess: (data) => setLatestDrink(data),
+        onError: (error) => setPhotoError(drinkErrorMessage(toApiError(error).code)),
+      }
+    );
+  }
+
   return (
     <div className={styles.container}>
       <nav className={styles.breadcrumbs} aria-label="Breadcrumb">
@@ -167,6 +190,24 @@ export function DrinkDetail() {
       </header>
 
       {drink.photoUrl ? <img src={drink.photoUrl} alt={drink.name} className={styles.photo} /> : null}
+
+      <section className={styles.section}>
+        <h2 className={styles.sectionTitle}>Photo</h2>
+        <input
+          ref={photoInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          onChange={handlePhotoSelected}
+          disabled={uploadPhotoMutation.isPending}
+          aria-label="Upload drink photo"
+        />
+        {uploadPhotoMutation.isPending ? <p className={styles.noticeText}>Uploading…</p> : null}
+        {photoError ? (
+          <p className={styles.formError} role="alert">
+            {photoError}
+          </p>
+        ) : null}
+      </section>
 
       <section className={styles.section}>
         <h2 className={styles.sectionTitle}>Status</h2>

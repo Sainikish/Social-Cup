@@ -104,6 +104,18 @@
   margin: 0;
 }
 
+.formError {
+  font-size: var(--font-size-sm);
+  color: var(--color-danger);
+  margin: 0;
+}
+
+.noticeText {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
 @media (max-width: 768px) {
   .container {
     padding: var(--spacing-lg);

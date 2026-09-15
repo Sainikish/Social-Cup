@@ -5,14 +5,18 @@ import com.socialcup.drink.dto.UpdateDrinkRequest;
 import com.socialcup.drink.dto.UpdateDrinkStatusRequest;
 import com.socialcup.drink.service.DrinkService;
 import jakarta.validation.Valid;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.UUID;
 
@@ -40,6 +44,14 @@ public class AdminDrinkController {
             @PathVariable UUID id,
             @Valid @RequestBody UpdateDrinkStatusRequest request) {
         DrinkResponse updated = drinkService.updateDrinkStatus(id, request);
+        return ResponseEntity.ok(updated);
+    }
+
+    @PostMapping(value = "/{id}/photo", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<DrinkResponse> uploadDrinkPhoto(
+            @PathVariable UUID id,
+            @RequestPart("photo") MultipartFile photo) {
+        DrinkResponse updated = drinkService.updatePhoto(id, photo);
         return ResponseEntity.ok(updated);
     }
 }

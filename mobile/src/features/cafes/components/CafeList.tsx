@@ -1,9 +1,10 @@
 import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, View } from 'react-native';
 
-import { EmptyState, ErrorState, LoadingIndicator } from '../../../components';
+import { EmptyState, ErrorState } from '../../../components';
 import { colors, spacing } from '../../../theme';
 import type { CafeSummaryResponse } from '../types';
 import { CafeCard } from './CafeCard';
+import { CafeListSkeleton } from './CafeListSkeleton';
 
 export interface CafeListProps {
   cafes: CafeSummaryResponse[];
@@ -40,9 +41,10 @@ export function CafeList({
 }: CafeListProps) {
   // Initial load only - pagination loading is handled separately below by
   // the footer indicator, so page 2+ never replaces the visible list with a
-  // full-screen spinner.
+  // full-screen spinner. A skeleton (rather than a spinner) keeps the list's
+  // own shape visible while it loads.
   if (isLoading) {
-    return <LoadingIndicator label="Loading cafes..." />;
+    return <CafeListSkeleton />;
   }
 
   if (isError) {

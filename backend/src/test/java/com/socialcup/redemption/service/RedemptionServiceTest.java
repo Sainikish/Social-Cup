@@ -17,6 +17,8 @@ import com.socialcup.redemption.entity.RedemptionCode;
 import com.socialcup.redemption.repository.RedemptionCodeRepository;
 import com.socialcup.redemption.repository.RedemptionRepository;
 import com.socialcup.user.entity.Member;
+import com.socialcup.user.entity.MemberStatus;
+import com.socialcup.user.repository.MemberRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -61,12 +63,16 @@ class RedemptionServiceTest {
     @Mock
     private CreditService creditService;
 
+    @Mock
+    private MemberRepository memberRepository;
+
     private RedemptionService redemptionService;
 
     @BeforeEach
     void setUp() {
         redemptionService = new RedemptionService(
-            redemptionCodeRepository, redemptionRepository, drinkRepository, cafeRepository, creditService);
+            redemptionCodeRepository, redemptionRepository, drinkRepository, cafeRepository, creditService,
+            memberRepository);
     }
 
     private static Member newMember(UUID id) {
@@ -74,7 +80,15 @@ class RedemptionServiceTest {
         member.setId(id);
         member.setEmail("ada@example.com");
         member.setFirstName("Ada");
+        member.setStatus(MemberStatus.ACTIVE);
         return member;
+    }
+
+    // redeem() re-resolves the member fresh from the repository rather than
+    // trusting the code's cached association (see its own comment) - every
+    // test that reaches that point needs this stubbed too.
+    private void stubActiveMember(Member member) {
+        when(memberRepository.findByIdAndDeletedAtIsNull(member.getId())).thenReturn(Optional.of(member));
     }
 
     private static Cafe newActiveCafe(UUID id) {
@@ -118,6 +132,7 @@ class RedemptionServiceTest {
         when(redemptionCodeRepository.findByCodeValueForUpdate(CODE_VALUE)).thenReturn(Optional.of(code));
         when(drinkRepository.findByIdAndArchivedAtIsNull(DRINK_ID)).thenReturn(Optional.of(drink));
         when(cafeRepository.findByIdAndArchivedAtIsNull(CAFE_ID)).thenReturn(Optional.of(cafe));
+        stubActiveMember(member);
         when(creditService.deductForRedemption(eq(MEMBER_ID), eq(creditPrice), eq(code.getId().toString())))
             .thenReturn(new CreditLedger());
         when(redemptionRepository.save(any(Redemption.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -321,6 +336,7 @@ class RedemptionServiceTest {
             .thenReturn(java.util.List.of(code));
         when(drinkRepository.findByIdAndArchivedAtIsNull(DRINK_ID)).thenReturn(Optional.of(drink));
         when(cafeRepository.findByIdAndArchivedAtIsNull(CAFE_ID)).thenReturn(Optional.of(cafe));
+        stubActiveMember(member);
         when(creditService.deductForRedemption(eq(MEMBER_ID), eq(4), eq(code.getId().toString())))
             .thenReturn(new CreditLedger());
         when(redemptionRepository.save(any(Redemption.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -383,6 +399,7 @@ class RedemptionServiceTest {
         when(redemptionCodeRepository.findByCodeValueForUpdate(CODE_VALUE)).thenReturn(Optional.of(code));
         when(drinkRepository.findByIdAndArchivedAtIsNull(DRINK_ID)).thenReturn(Optional.of(drink));
         when(cafeRepository.findByIdAndArchivedAtIsNull(CAFE_ID)).thenReturn(Optional.of(cafe));
+        stubActiveMember(member);
         when(creditService.deductForRedemption(eq(MEMBER_ID), eq(10), any()))
             .thenThrow(new InsufficientCreditsException("insufficient credits"));
 
@@ -391,6 +408,51 @@ class RedemptionServiceTest {
 
         verify(redemptionRepository, never()).save(any());
         verify(redemptionCodeRepository, never()).save(any());
+    }
+
+    // ---- Membership status ----
+
+    @Test
+    void redeem_forCancelledMember_throwsConflict_andNeverDeductsCredits() {
+        // Covers a member whose subscription genuinely ended between
+        // generating this code and it being scanned - re-resolved fresh
+        // from the repository rather than trusting the code's cached
+        // Member association (see redeem()'s own comment on this).
+        Member cancelledMember = newMember(MEMBER_ID);
+        cancelledMember.setStatus(MemberStatus.CANCELLED);
+        Cafe cafe = newActiveCafe(CAFE_ID);
+        Drink drink = newActiveDrink(DRINK_ID, cafe, 4);
+        RedemptionCode code = newLiveCode(cancelledMember, cafe, drink);
+        when(redemptionCodeRepository.findByCodeValueForUpdate(CODE_VALUE)).thenReturn(Optional.of(code));
+        when(drinkRepository.findByIdAndArchivedAtIsNull(DRINK_ID)).thenReturn(Optional.of(drink));
+        when(cafeRepository.findByIdAndArchivedAtIsNull(CAFE_ID)).thenReturn(Optional.of(cafe));
+        stubActiveMember(cancelledMember);
+
+        assertThatThrownBy(() -> redemptionService.redeem(CAFE_ID, CODE_VALUE))
+            .isInstanceOf(ConflictException.class)
+            .hasMessageContaining("not active");
+
+        verify(creditService, never()).deductForRedemption(any(), anyInt(), any());
+        verify(redemptionRepository, never()).save(any());
+        verify(redemptionCodeRepository, never()).save(any());
+    }
+
+    @Test
+    void redeem_forSuspendedMember_throwsConflict() {
+        Member suspendedMember = newMember(MEMBER_ID);
+        suspendedMember.setStatus(MemberStatus.SUSPENDED);
+        Cafe cafe = newActiveCafe(CAFE_ID);
+        Drink drink = newActiveDrink(DRINK_ID, cafe, 4);
+        RedemptionCode code = newLiveCode(suspendedMember, cafe, drink);
+        when(redemptionCodeRepository.findByCodeValueForUpdate(CODE_VALUE)).thenReturn(Optional.of(code));
+        when(drinkRepository.findByIdAndArchivedAtIsNull(DRINK_ID)).thenReturn(Optional.of(drink));
+        when(cafeRepository.findByIdAndArchivedAtIsNull(CAFE_ID)).thenReturn(Optional.of(cafe));
+        stubActiveMember(suspendedMember);
+
+        assertThatThrownBy(() -> redemptionService.redeem(CAFE_ID, CODE_VALUE))
+            .isInstanceOf(ConflictException.class);
+
+        verify(creditService, never()).deductForRedemption(any(), anyInt(), any());
     }
 
     // ---- Member identity ----

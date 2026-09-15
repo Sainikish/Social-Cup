@@ -26,6 +26,15 @@ export interface CafeSummaryResponse {
   vibeTags: string | null;
   primaryPhotoUrl: string | null;
   distanceKm: number | null;
+  // Both being added to CafeSummaryResponse/CafeDetailResponse by a parallel
+  // backend workstream as of this writing - optional/nullable here because
+  // this client may run against a backend build from before or after that
+  // rollout. A cafe with no ratings yet is expected to report
+  // averageRating: null (not merely omit the field), but both are treated
+  // identically by every consumer: render the "New" badge (see
+  // RatingSummaryBadge in features/ratings), never "0" or a crash.
+  averageRating?: number | null;
+  ratingCount?: number;
 }
 
 // Mirrors com.socialcup.cafe.dto.CafeHoursDto. openTime/closeTime are
@@ -78,6 +87,10 @@ export interface CafeDetailResponse {
   drinks: DrinkResponse[];
   createdAt: string;
   updatedAt: string;
+  // See CafeSummaryResponse above - same fields, same rollout, same
+  // "absent and null both mean New" contract.
+  averageRating?: number | null;
+  ratingCount?: number;
 }
 
 // Matches GET /cafes' actual supported query parameters exactly (see

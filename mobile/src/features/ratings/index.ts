@@ -30,3 +30,5 @@ export { RatingList } from './components/RatingList';
 export type { RatingListProps } from './components/RatingList';
 export { RatingForm } from './components/RatingForm';
 export type { RatingFormProps } from './components/RatingForm';
+export { RatingSummaryBadge } from './components/RatingSummaryBadge';
+export type { RatingSummaryBadgeProps } from './components/RatingSummaryBadge';

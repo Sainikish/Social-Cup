@@ -1,7 +1,7 @@
 import { useMutation } from '@tanstack/react-query';
 import { Link } from 'expo-router';
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { toApiError } from '../../src/api/client';
 import { Button, TextInput } from '../../src/components';
@@ -53,51 +53,62 @@ export default function LoginScreen() {
 
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-        <Text style={styles.title}>Welcome back</Text>
-        <Text style={styles.subtitle}>Log in to continue to Social Cup.</Text>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <Image source={require('../../assets/login-hero.jpg')} style={styles.hero} resizeMode="cover" />
 
-        <View style={styles.form}>
-          <TextInput
-            label="Email"
-            accessibilityLabel="Email"
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            autoComplete="email"
-            keyboardType="email-address"
-            textContentType="emailAddress"
-            errorMessage={fieldErrors.email}
-            editable={!isSubmitting}
-            returnKeyType="next"
-          />
-          <TextInput
-            label="Password"
-            accessibilityLabel="Password"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            autoCapitalize="none"
-            autoComplete="password"
-            textContentType="password"
-            errorMessage={fieldErrors.password}
-            editable={!isSubmitting}
-            returnKeyType="done"
-            onSubmitEditing={handleSubmit}
-          />
+        <View style={styles.content}>
+          <Text style={styles.title}>Welcome back</Text>
+          <Text style={styles.subtitle}>Log in to continue to Social Cup.</Text>
 
-          {formError ? (
-            <Text style={styles.formError} accessibilityRole="alert">
-              {formError}
-            </Text>
-          ) : null}
+          <View style={styles.form}>
+            <TextInput
+              label="Email"
+              accessibilityLabel="Email"
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              autoComplete="email"
+              keyboardType="email-address"
+              textContentType="emailAddress"
+              errorMessage={fieldErrors.email}
+              editable={!isSubmitting}
+              returnKeyType="next"
+            />
+            <TextInput
+              label="Password"
+              accessibilityLabel="Password"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              autoCapitalize="none"
+              autoComplete="password"
+              textContentType="password"
+              errorMessage={fieldErrors.password}
+              editable={!isSubmitting}
+              returnKeyType="done"
+              onSubmitEditing={handleSubmit}
+            />
 
-          <Button label="Log In" onPress={handleSubmit} loading={isSubmitting} disabled={isSubmitting} />
+            {formError ? (
+              <Text style={styles.formError} accessibilityRole="alert">
+                {formError}
+              </Text>
+            ) : null}
+
+            <Button label="Log In" onPress={handleSubmit} loading={isSubmitting} disabled={isSubmitting} />
+          </View>
+
+          <Link href="/(auth)/forgot-password" style={styles.link}>
+            <Text style={styles.linkText}>Forgot your password?</Text>
+          </Link>
+          <Link href="/(auth)/register" style={styles.link}>
+            <Text style={styles.linkText}>Don&apos;t have an account? Create one</Text>
+          </Link>
         </View>
-
-        <Link href="/(auth)/register" style={styles.link}>
-          <Text style={styles.linkText}>Don&apos;t have an account? Create one</Text>
-        </Link>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -107,11 +118,21 @@ const styles = StyleSheet.create({
   flex: {
     flex: 1,
   },
-  container: {
+  scrollContent: {
     flexGrow: 1,
     backgroundColor: colors.background,
+  },
+  // The image's own bottom edge already fades to colors.background (see
+  // the asset itself) - no card/shadow needed for the content below it to
+  // read as one continuous surface, not two stacked panels.
+  hero: {
+    width: '100%',
+    height: 300,
+  },
+  content: {
+    flexGrow: 1,
     padding: spacing.xl,
-    justifyContent: 'center',
+    paddingTop: spacing.lg,
     gap: spacing.lg,
   },
   title: {

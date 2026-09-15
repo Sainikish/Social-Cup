@@ -3,11 +3,16 @@ package com.socialcup.admin.service;
 import com.socialcup.admin.entity.AuditLog;
 import com.socialcup.admin.repository.AuditLogRepository;
 import com.socialcup.auth.dto.MemberDto;
+import com.socialcup.common.dto.PageResponse;
 import com.socialcup.common.exception.ConflictException;
 import com.socialcup.common.exception.ResourceNotFoundException;
+import com.socialcup.credit.dto.CreditBalanceResponse;
+import com.socialcup.credit.service.CreditService;
 import com.socialcup.user.entity.Member;
 import com.socialcup.user.entity.MemberStatus;
 import com.socialcup.user.repository.MemberRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,10 +32,41 @@ public class AdminMemberService {
 
     private final MemberRepository memberRepository;
     private final AuditLogRepository auditLogRepository;
+    private final CreditService creditService;
 
-    public AdminMemberService(MemberRepository memberRepository, AuditLogRepository auditLogRepository) {
+    public AdminMemberService(
+            MemberRepository memberRepository,
+            AuditLogRepository auditLogRepository,
+            CreditService creditService) {
         this.memberRepository = memberRepository;
         this.auditLogRepository = auditLogRepository;
+        this.creditService = creditService;
+    }
+
+    @Transactional(readOnly = true)
+    public PageResponse<MemberDto> searchMembers(String searchQuery, MemberStatus status, Pageable pageable) {
+        String trimmedQuery = searchQuery != null && !searchQuery.isBlank() ? searchQuery.trim() : null;
+        Page<Member> page = memberRepository.searchMembers(trimmedQuery, status, pageable);
+        return PageResponse.of(page, MemberDto::fromEntity);
+    }
+
+    @Transactional(readOnly = true)
+    public MemberDto getMemberById(UUID memberId) {
+        Member member = memberRepository.findByIdAndDeletedAtIsNull(memberId)
+            .orElseThrow(() -> new ResourceNotFoundException("Member not found with id: " + memberId));
+        return MemberDto.fromEntity(member);
+    }
+
+    // Reuses CreditService.getBalance verbatim (the same computation the
+    // member's own GET /users/me/credits exposes) - existence is checked
+    // first so an unknown/deleted memberId reports 404 rather than a
+    // misleadingly "real" balance of 0.
+    @Transactional(readOnly = true)
+    public CreditBalanceResponse getCreditBalance(UUID memberId) {
+        if (memberRepository.findByIdAndDeletedAtIsNull(memberId).isEmpty()) {
+            throw new ResourceNotFoundException("Member not found with id: " + memberId);
+        }
+        return new CreditBalanceResponse(creditService.getBalance(memberId));
     }
 
     public MemberDto suspend(UUID actorMemberId, UUID targetMemberId) {

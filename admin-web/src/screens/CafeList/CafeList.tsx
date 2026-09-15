@@ -2,34 +2,45 @@ import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 import { toApiError } from '../../api/client';
-import { Button, Card, ErrorState, Input, LoadingState } from '../../components';
-import { cafeErrorMessage, useCafeSearchQuery } from '../../features/cafes';
+import { Button, Card, ErrorState, Input, LoadingState, Pagination } from '../../components';
+import {
+  cafeErrorMessage,
+  useAdminCafeSearchQuery,
+  type CafeAdminSearchParams,
+  type CafeStatus,
+} from '../../features/cafes';
 import styles from './CafeList.module.css';
 
-// There is no admin cafe listing endpoint on the backend, so this screen is
-// NOT "All Cafes" - it is a search over the same public, ACTIVE-cafe-only
-// endpoint mobile/barista-web use (GET /cafes/search). Inactive/archived
-// cafes will never appear here; that limitation is stated explicitly below
-// rather than left implicit.
+const PAGE_SIZE = 20;
+const ALL_STATUSES: CafeStatus[] = ['ACTIVE', 'INACTIVE', 'ARCHIVED'];
+
+// Backed by GET /admin/cafes (search+paginate, any status including
+// archived) and GET /admin/cafes/{id} (row click) - both added alongside
+// this screen, replacing the old public-search-only fallback that could
+// never show an inactive/archived cafe.
 export function CafeList() {
-  const [query, setQuery] = useState('');
-  const [submittedQuery, setSubmittedQuery] = useState('');
-  const [jumpToId, setJumpToId] = useState('');
+  const [queryInput, setQueryInput] = useState('');
+  const [statusInput, setStatusInput] = useState<CafeStatus | ''>('');
+  const [filters, setFilters] = useState<CafeAdminSearchParams>({});
+  const [page, setPage] = useState(0);
   const navigate = useNavigate();
 
-  const searchQuery = useCafeSearchQuery(submittedQuery);
+  const searchQuery = useAdminCafeSearchQuery({ ...filters, page, size: PAGE_SIZE });
 
-  function handleSearchSubmit(event: FormEvent<HTMLFormElement>) {
+  function handleFilterSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setSubmittedQuery(query);
+    setFilters({
+      q: queryInput.trim() || undefined,
+      status: statusInput || undefined,
+    });
+    setPage(0);
   }
 
-  function handleJumpSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const trimmed = jumpToId.trim();
-    if (trimmed) {
-      navigate(`/cafes/${trimmed}`);
-    }
+  function handleReset() {
+    setQueryInput('');
+    setStatusInput('');
+    setFilters({});
+    setPage(0);
   }
 
   return (
@@ -37,76 +48,103 @@ export function CafeList() {
       <header className={styles.header}>
         <div>
           <h1 className={styles.title}>Cafes</h1>
-          <p className={styles.subtitle}>Search active cafes, or create a new one.</p>
+          <p className={styles.subtitle}>Search cafes of any status, or create a new one.</p>
         </div>
         <Button label="Create Cafe" onClick={() => navigate('/cafes/new')} className={styles.createButton} />
       </header>
 
-      <Card className={styles.notice}>
-        <p className={styles.noticeText}>
-          There is no admin cafe listing endpoint yet. This searches the same public,{' '}
-          <strong>active-cafes-only</strong> search the mobile app uses (<code>GET /cafes/search</code>) - inactive
-          and archived cafes will not appear here. If you know a cafe&apos;s ID, open it directly below.
-        </p>
+      <Card className={styles.filterCard}>
+        <h2 className={styles.sectionTitle}>Filters</h2>
+        <form className={styles.filterForm} onSubmit={handleFilterSubmit} noValidate>
+          <div className={styles.filterRow}>
+            <Input
+              id="cafe-search-query"
+              label="Search by name or address"
+              value={queryInput}
+              onChange={(event) => setQueryInput(event.target.value)}
+            />
+            <label className={styles.statusLabel} htmlFor="cafe-search-status">
+              <span className={styles.statusLabelText}>Status</span>
+              <select
+                id="cafe-search-status"
+                className={styles.statusSelect}
+                value={statusInput}
+                onChange={(event) => setStatusInput(event.target.value as CafeStatus | '')}
+              >
+                <option value="">Any status</option>
+                {ALL_STATUSES.map((status) => (
+                  <option key={status} value={status}>
+                    {status}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div className={styles.filterActions}>
+            <Button type="submit" label="Search" variant="outline" className={styles.filterButton} />
+            <Button
+              type="button"
+              label="Reset"
+              variant="outline"
+              className={styles.filterButton}
+              onClick={handleReset}
+            />
+          </div>
+        </form>
       </Card>
 
-      <form className={styles.searchForm} onSubmit={handleSearchSubmit}>
-        <Input
-          id="cafe-search-query"
-          label="Search active cafes by name"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-        />
-        <Button type="submit" label="Search" variant="outline" className={styles.searchButton} />
-      </form>
+      {searchQuery.isLoading ? <LoadingState label="Loading cafes…" /> : null}
 
-      {searchQuery.isFetching ? <LoadingState label="Searching…" /> : null}
       {searchQuery.isError ? (
         <ErrorState
           message={cafeErrorMessage(toApiError(searchQuery.error).code)}
           onRetry={() => searchQuery.refetch()}
         />
       ) : null}
+
       {searchQuery.isSuccess && searchQuery.data.content.length === 0 ? (
-        <p className={styles.emptyMessage}>No active cafes matched &quot;{submittedQuery}&quot;.</p>
+        <p className={styles.emptyMessage}>No cafes matched these filters.</p>
       ) : null}
 
       {searchQuery.isSuccess && searchQuery.data.content.length > 0 ? (
-        <ul className={styles.resultList}>
-          {searchQuery.data.content.map((cafe) => (
-            <li key={cafe.id}>
-              <Link to={`/cafes/${cafe.id}`} className={styles.resultLink}>
-                {cafe.primaryPhotoUrl ? (
-                  <img src={cafe.primaryPhotoUrl} alt={cafe.name} className={styles.thumbnail} />
-                ) : null}
-                <span className={styles.resultText}>
-                  <span className={styles.resultName}>{cafe.name}</span>
-                  <span className={styles.resultMeta}>
-                    {cafe.address}
-                    {cafe.neighbourhood ? ` · ${cafe.neighbourhood}` : ''}
-                  </span>
-                </span>
-              </Link>
-            </li>
-          ))}
-        </ul>
-      ) : null}
+        <>
+          <div className={styles.tableScroll}>
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Address</th>
+                  <th>Neighbourhood</th>
+                  <th>Status</th>
+                  <th>Featured</th>
+                </tr>
+              </thead>
+              <tbody>
+                {searchQuery.data.content.map((cafe) => (
+                  <tr key={cafe.id}>
+                    <td>
+                      <Link to={`/cafes/${cafe.id}`}>{cafe.name}</Link>
+                    </td>
+                    <td>{cafe.address}</td>
+                    <td>{cafe.neighbourhood ?? '—'}</td>
+                    <td>{cafe.status}</td>
+                    <td>{cafe.featured ? 'Yes' : 'No'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
-      <Card className={styles.jumpCard}>
-        <h2 className={styles.jumpTitle}>Open a cafe by ID</h2>
-        <p className={styles.noticeText}>
-          Inactive or archived cafes cannot be found by search - open them here if you already know their ID.
-        </p>
-        <form className={styles.jumpForm} onSubmit={handleJumpSubmit}>
-          <Input
-            id="cafe-jump-id"
-            label="Cafe ID"
-            value={jumpToId}
-            onChange={(event) => setJumpToId(event.target.value)}
+          <Pagination
+            page={searchQuery.data.page}
+            totalPages={searchQuery.data.totalPages}
+            first={searchQuery.data.first}
+            last={searchQuery.data.last}
+            onPageChange={setPage}
+            disabled={searchQuery.isFetching}
           />
-          <Button type="submit" label="Open" variant="outline" className={styles.searchButton} />
-        </form>
-      </Card>
+        </>
+      ) : null}
     </div>
   );
 }

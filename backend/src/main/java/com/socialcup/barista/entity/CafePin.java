@@ -44,6 +44,15 @@ public class CafePin {
     @Column(name = "locked_until")
     private Instant lockedUntil;
 
+    // Bumped on every admin PIN reset (see BaristaAuthService.resetPin) and
+    // embedded as a claim on every barista access/refresh token issued -
+    // refresh() rejects a token whose embedded version doesn't match the
+    // current one, which is what makes a reset "sign out every trusted
+    // device at once" (PRD 8.4) actually true rather than just changing the
+    // PIN new logins need.
+    @Column(name = "pin_version", nullable = false)
+    private int pinVersion = 0;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -113,6 +122,14 @@ public class CafePin {
 
     public void setLockedUntil(Instant lockedUntil) {
         this.lockedUntil = lockedUntil;
+    }
+
+    public int getPinVersion() {
+        return pinVersion;
+    }
+
+    public void setPinVersion(int pinVersion) {
+        this.pinVersion = pinVersion;
     }
 
     public Instant getCreatedAt() {

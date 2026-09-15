@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { cafeKeys } from '../cafes/queryKeys';
-import { createDrink, getDrinksByCafe, getPublicDrinkById, updateDrink, updateDrinkStatus } from './api';
+import { createDrink, getDrinksByCafe, getPublicDrinkById, updateDrink, updateDrinkStatus, uploadDrinkPhoto } from './api';
 import { drinkKeys } from './queryKeys';
 import type { CreateDrinkRequest, DrinkStatus, UpdateDrinkRequest } from './types';
 
@@ -33,7 +33,7 @@ export function useCreateDrinkMutation() {
         queryClient.invalidateQueries({ queryKey: drinkKeys.byCafe(data.cafeId) });
         // CafeDetailResponse/AdminCafeDetailResponse embed a cafe's active
         // drinks directly - a new drink makes that cached list stale too.
-        queryClient.invalidateQueries({ queryKey: cafeKeys.publicDetail(data.cafeId) });
+        queryClient.invalidateQueries({ queryKey: cafeKeys.detail(data.cafeId) });
       }
     },
   });
@@ -47,7 +47,7 @@ export function useUpdateDrinkMutation() {
       queryClient.invalidateQueries({ queryKey: drinkKeys.publicDetail(data.id) });
       if (data.cafeId) {
         queryClient.invalidateQueries({ queryKey: drinkKeys.byCafe(data.cafeId) });
-        queryClient.invalidateQueries({ queryKey: cafeKeys.publicDetail(data.cafeId) });
+        queryClient.invalidateQueries({ queryKey: cafeKeys.detail(data.cafeId) });
       }
     },
   });
@@ -61,7 +61,21 @@ export function useUpdateDrinkStatusMutation() {
       queryClient.invalidateQueries({ queryKey: drinkKeys.publicDetail(data.id) });
       if (data.cafeId) {
         queryClient.invalidateQueries({ queryKey: drinkKeys.byCafe(data.cafeId) });
-        queryClient.invalidateQueries({ queryKey: cafeKeys.publicDetail(data.cafeId) });
+        queryClient.invalidateQueries({ queryKey: cafeKeys.detail(data.cafeId) });
+      }
+    },
+  });
+}
+
+export function useUploadDrinkPhotoMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, file }: { id: string; file: File }) => uploadDrinkPhoto(id, file),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: drinkKeys.publicDetail(data.id) });
+      if (data.cafeId) {
+        queryClient.invalidateQueries({ queryKey: drinkKeys.byCafe(data.cafeId) });
+        queryClient.invalidateQueries({ queryKey: cafeKeys.detail(data.cafeId) });
       }
     },
   });

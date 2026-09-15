@@ -3,8 +3,8 @@ import { render, screen } from '@testing-library/react';
 import type { ReactElement } from 'react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 
-import { getPublicCafeById, searchCafes } from '../../src/features/cafes/api';
-import type { CafeDetailResponse } from '../../src/features/cafes/types';
+import { getCafeByIdForAdmin, searchCafes, searchCafesForAdmin } from '../../src/features/cafes/api';
+import type { AdminCafeDetailResponse } from '../../src/features/cafes/types';
 import { CafeCreate } from '../../src/screens/CafeCreate/CafeCreate';
 import { CafeDetail } from '../../src/screens/CafeDetail/CafeDetail';
 import { CafeList } from '../../src/screens/CafeList/CafeList';
@@ -12,9 +12,10 @@ import { CafeList } from '../../src/screens/CafeList/CafeList';
 vi.mock('../../src/features/cafes/api');
 
 const mockSearchCafes = vi.mocked(searchCafes);
-const mockGetPublicCafeById = vi.mocked(getPublicCafeById);
+const mockSearchCafesForAdmin = vi.mocked(searchCafesForAdmin);
+const mockGetCafeByIdForAdmin = vi.mocked(getCafeByIdForAdmin);
 
-const PUBLIC_DETAIL: CafeDetailResponse = {
+const ADMIN_DETAIL: AdminCafeDetailResponse = {
   id: 'cafe-1',
   name: 'Daily Grind',
   address: '123 Main St',
@@ -25,6 +26,7 @@ const PUBLIC_DETAIL: CafeDetailResponse = {
   phoneNumber: null,
   email: null,
   website: null,
+  payoutRate: null,
   featured: false,
   vibeTags: null,
   description: null,
@@ -82,7 +84,17 @@ beforeEach(() => {
     last: true,
     empty: true,
   });
-  mockGetPublicCafeById.mockResolvedValue(PUBLIC_DETAIL);
+  mockSearchCafesForAdmin.mockResolvedValue({
+    content: [],
+    page: 0,
+    size: 20,
+    totalElements: 0,
+    totalPages: 0,
+    first: true,
+    last: true,
+    empty: true,
+  });
+  mockGetCafeByIdForAdmin.mockResolvedValue(ADMIN_DETAIL);
 });
 
 describe.each([1024, 768])('cafe screens at %ipx', (width) => {

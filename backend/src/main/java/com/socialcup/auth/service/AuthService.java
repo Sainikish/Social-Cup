@@ -7,22 +7,30 @@ import com.socialcup.auth.dto.RefreshTokenRequest;
 import com.socialcup.auth.dto.RegisterRequest;
 import com.socialcup.admin.entity.AuditLog;
 import com.socialcup.admin.repository.AuditLogRepository;
+import com.socialcup.auth.entity.VerificationCode;
+import com.socialcup.auth.entity.VerificationPurpose;
 import com.socialcup.auth.exception.AccountLockedException;
 import com.socialcup.auth.exception.InvalidCredentialsException;
 import com.socialcup.auth.exception.InvalidTokenException;
+import com.socialcup.auth.exception.InvalidVerificationCodeException;
+import com.socialcup.auth.repository.VerificationCodeRepository;
 import com.socialcup.common.exception.ConflictException;
 import com.socialcup.common.exception.ResourceNotFoundException;
+import com.socialcup.email.service.EmailService;
 import com.socialcup.security.JwtTokenProvider;
 import com.socialcup.subscription.service.SubscriptionService;
 import com.socialcup.user.entity.Member;
 import com.socialcup.user.entity.MemberRole;
 import com.socialcup.user.entity.MemberStatus;
 import com.socialcup.user.repository.MemberRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -31,6 +39,8 @@ import java.util.UUID;
 @Service
 @Transactional
 public class AuthService {
+
+    private static final Logger log = LoggerFactory.getLogger(AuthService.class);
 
     private static final int MAX_FAILED_ATTEMPTS = 5;
     private static final Duration LOCK_DURATION = Duration.ofMinutes(15);
@@ -43,11 +53,23 @@ public class AuthService {
     // deleteAccount below.
     private static final String DELETED_EMAIL_DOMAIN = "deleted.socialcup.invalid";
 
+    // Email verification / password reset codes: a 6-digit numeric code,
+    // hashed with the same PasswordEncoder as real passwords (never stored
+    // in plaintext), expiring after 15 minutes, locked out after 5 wrong
+    // guesses (mirrors MAX_FAILED_ATTEMPTS/LOCK_DURATION above) - the only
+    // way out of a locked-out code is requesting a fresh one.
+    private static final int CODE_MAX_ATTEMPTS = 5;
+    private static final Duration CODE_TTL = Duration.ofMinutes(15);
+    private static final int CODE_BOUND = 1_000_000;
+
     private final MemberRepository memberRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider tokenProvider;
     private final SubscriptionService subscriptionService;
     private final AuditLogRepository auditLogRepository;
+    private final VerificationCodeRepository verificationCodeRepository;
+    private final EmailService emailService;
+    private final SecureRandom secureRandom = new SecureRandom();
     private final long accessTokenExpirySeconds;
 
     public AuthService(
@@ -56,12 +78,16 @@ public class AuthService {
             JwtTokenProvider tokenProvider,
             SubscriptionService subscriptionService,
             AuditLogRepository auditLogRepository,
+            VerificationCodeRepository verificationCodeRepository,
+            EmailService emailService,
             @Value("${app.security.jwt.access-token-expiry-minutes:15}") long accessTokenExpiryMinutes) {
         this.memberRepository = memberRepository;
         this.passwordEncoder = passwordEncoder;
         this.tokenProvider = tokenProvider;
         this.subscriptionService = subscriptionService;
         this.auditLogRepository = auditLogRepository;
+        this.verificationCodeRepository = verificationCodeRepository;
+        this.emailService = emailService;
         this.accessTokenExpirySeconds = accessTokenExpiryMinutes * 60;
     }
 
@@ -86,6 +112,12 @@ public class AuthService {
         member.setRole(MemberRole.MEMBER);
 
         Member savedMember = memberRepository.save(member);
+        // Best-effort: a member is fully registered and can log in
+        // regardless of whether this email actually goes out (e.g. SES
+        // isn't configured with real credentials yet) - see
+        // issueAndSendCode below. They can always request a fresh one via
+        // resendVerificationEmail.
+        issueAndSendCode(savedMember, VerificationPurpose.EMAIL_VERIFICATION);
         return generateAuthResponse(savedMember);
     }
 
@@ -147,6 +179,125 @@ public class AuthService {
         Member member = memberRepository.findByIdAndDeletedAtIsNull(memberId)
             .orElseThrow(() -> new ResourceNotFoundException("Member not found with id: " + memberId));
         return MemberDto.fromEntity(member);
+    }
+
+    // Called only while already authenticated (see AuthController) - the
+    // member proves ownership of the code, not of the email address itself
+    // (that was already implied by being logged in as this account).
+    public MemberDto verifyEmail(UUID memberId, String code) {
+        Member member = memberRepository.findByIdAndDeletedAtIsNull(memberId)
+            .orElseThrow(() -> new ResourceNotFoundException("Member not found with id: " + memberId));
+
+        // Idempotent: a member who already verified (e.g. a second tab, or a
+        // retry after the first response was lost) is not an error.
+        if (member.isEmailVerified()) {
+            return MemberDto.fromEntity(member);
+        }
+
+        requireValidCode(memberId, VerificationPurpose.EMAIL_VERIFICATION, code);
+
+        member.setEmailVerified(true);
+        member.setEmailVerifiedAt(Instant.now());
+        memberRepository.save(member);
+        return MemberDto.fromEntity(member);
+    }
+
+    public void resendVerificationEmail(UUID memberId) {
+        Member member = memberRepository.findByIdAndDeletedAtIsNull(memberId)
+            .orElseThrow(() -> new ResourceNotFoundException("Member not found with id: " + memberId));
+
+        if (member.isEmailVerified()) {
+            throw new ConflictException("Email is already verified");
+        }
+
+        issueAndSendCode(member, VerificationPurpose.EMAIL_VERIFICATION);
+    }
+
+    // Always completes successfully regardless of whether the email exists -
+    // never reveals account existence one way or the other (see
+    // AuthController, which returns a flat 204 either way).
+    public void forgotPassword(String email) {
+        String normalizedEmail = email.trim().toLowerCase();
+        memberRepository.findByEmailAndDeletedAtIsNull(normalizedEmail)
+            .ifPresent(member -> issueAndSendCode(member, VerificationPurpose.PASSWORD_RESET));
+    }
+
+    // Logs the member straight in on success, the same way register()
+    // already does - one less round trip than making them separately call
+    // /auth/login right after proving they own both the email and the code.
+    public AuthResponse resetPassword(String email, String code, String newPassword) {
+        String normalizedEmail = email.trim().toLowerCase();
+        Member member = memberRepository.findByEmailAndDeletedAtIsNull(normalizedEmail)
+            // Same exception a genuinely wrong code would throw - an unknown
+            // email must not be distinguishable from a bad code.
+            .orElseThrow(InvalidVerificationCodeException::new);
+
+        requireValidCode(member.getId(), VerificationPurpose.PASSWORD_RESET, code);
+
+        member.setPasswordHash(passwordEncoder.encode(newPassword));
+        // Proving control of the account via email code is at least as
+        // strong as a correct password - lifting any existing lockout here
+        // avoids the otherwise-confusing case of resetting a forgotten
+        // password only to remain locked out for the rest of LOCK_DURATION.
+        member.setFailedLoginAttempts(0);
+        member.setLockedUntil(null);
+        memberRepository.save(member);
+
+        return generateAuthResponse(member);
+    }
+
+    // Shared by register() (email verification) and forgotPassword() -
+    // generates a fresh 6-digit code, hashes it exactly like a password (see
+    // CODE_TTL/CODE_MAX_ATTEMPTS), persists it, then attempts delivery.
+    // Deliberately swallows any email-send failure: the code still exists
+    // and can be verified if the member somehow received the email anyway,
+    // or a fresh one can be requested - but the caller's own request (a
+    // registration, a forgot-password call) must never fail just because
+    // SES isn't configured with real credentials yet (see EmailService).
+    private void issueAndSendCode(Member member, VerificationPurpose purpose) {
+        String plainCode = String.format("%06d", secureRandom.nextInt(CODE_BOUND));
+
+        VerificationCode verificationCode = new VerificationCode();
+        verificationCode.setMember(member);
+        verificationCode.setPurpose(purpose);
+        verificationCode.setCodeHash(passwordEncoder.encode(plainCode));
+        verificationCode.setExpiresAt(Instant.now().plus(CODE_TTL));
+        verificationCodeRepository.save(verificationCode);
+
+        try {
+            if (purpose == VerificationPurpose.EMAIL_VERIFICATION) {
+                emailService.sendVerificationCode(member.getEmail(), plainCode);
+            } else {
+                emailService.sendPasswordResetCode(member.getEmail(), plainCode);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to send {} code to member {}: {}", purpose, member.getId(), e.getMessage());
+        }
+    }
+
+    // Looks up the most recent unused code for this member+purpose, checks
+    // it hasn't expired or been guessed wrong too many times, then compares
+    // it - a wrong guess increments failedAttempts (persisted, so attempts
+    // accumulate across requests) and a correct one marks it used so it can
+    // never be replayed. Every failure path throws the exact same exception
+    // (no found/expired/locked/wrong distinction reaches the client).
+    private void requireValidCode(UUID memberId, VerificationPurpose purpose, String code) {
+        VerificationCode verificationCode = verificationCodeRepository
+            .findFirstByMemberIdAndPurposeAndUsedAtIsNullOrderByCreatedAtDesc(memberId, purpose)
+            .orElseThrow(InvalidVerificationCodeException::new);
+
+        if (!verificationCode.isUsableAt(Instant.now()) || verificationCode.getFailedAttempts() >= CODE_MAX_ATTEMPTS) {
+            throw new InvalidVerificationCodeException();
+        }
+
+        if (!passwordEncoder.matches(code, verificationCode.getCodeHash())) {
+            verificationCode.setFailedAttempts(verificationCode.getFailedAttempts() + 1);
+            verificationCodeRepository.save(verificationCode);
+            throw new InvalidVerificationCodeException();
+        }
+
+        verificationCode.setUsedAt(Instant.now());
+        verificationCodeRepository.save(verificationCode);
     }
 
     // Soft-delete/anonymize only - the member row itself is never removed,

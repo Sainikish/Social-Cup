@@ -14,6 +14,7 @@ import { MemberLookup } from '../screens/MemberLookup/MemberLookup';
 import { CafePayouts } from '../screens/CafePayouts/CafePayouts';
 import { PayoutList } from '../screens/PayoutList/PayoutList';
 import { RedemptionList } from '../screens/RedemptionList/RedemptionList';
+import { Settings } from '../screens/Settings/Settings';
 import { SubscriptionList } from '../screens/SubscriptionList/SubscriptionList';
 import { ProtectedRoute } from './ProtectedRoute';
 import { PublicRoute } from './PublicRoute';
@@ -138,6 +139,14 @@ export function AppRouter() {
         element={
           <ProtectedRoute>
             <AuditLogList />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/settings"
+        element={
+          <ProtectedRoute>
+            <Settings />
           </ProtectedRoute>
         }
       />

@@ -33,6 +33,8 @@ export function CafeSearchSelect({ value, onSelect, onClear }: CafeSearchSelectP
   }
 
   const results = searchQuery.data?.content ?? [];
+  const showNoResults = !searchQuery.isFetching && searchQuery.isSuccess && results.length === 0;
+  const hasDropdown = searchQuery.isFetching || searchQuery.isError || showNoResults || results.length > 0;
 
   return (
     <div className={styles.wrapper}>
@@ -45,25 +47,30 @@ export function CafeSearchSelect({ value, onSelect, onClear }: CafeSearchSelectP
         autoComplete="off"
       />
 
-      {searchQuery.isFetching ? <p className={styles.hint}>Searching…</p> : null}
-      {searchQuery.isError ? (
-        <p className={styles.hint}>Could not search cafes. Check your connection.</p>
-      ) : null}
-      {!searchQuery.isFetching && searchQuery.isSuccess && results.length === 0 ? (
-        <p className={styles.hint}>No cafes matched &quot;{debouncedQuery}&quot;.</p>
-      ) : null}
+      {/* Floats over the page instead of sitting in normal flow, so the
+          card's height (and the centered layout around it) never shifts
+          as results come and go while typing. */}
+      {hasDropdown ? (
+        <div className={styles.dropdown}>
+          {searchQuery.isFetching ? <p className={styles.hint}>Searching…</p> : null}
+          {searchQuery.isError ? (
+            <p className={styles.hint}>Could not search cafes. Check your connection.</p>
+          ) : null}
+          {showNoResults ? <p className={styles.hint}>No cafes matched &quot;{debouncedQuery}&quot;.</p> : null}
 
-      {results.length > 0 ? (
-        <ul className={styles.list}>
-          {results.map((cafe) => (
-            <li key={cafe.id}>
-              <button type="button" className={styles.option} onClick={() => onSelect(cafe)}>
-                <span className={styles.optionName}>{cafe.name}</span>
-                {cafe.neighbourhood ? <span className={styles.optionMeta}>{cafe.neighbourhood}</span> : null}
-              </button>
-            </li>
-          ))}
-        </ul>
+          {results.length > 0 ? (
+            <ul className={styles.list}>
+              {results.map((cafe) => (
+                <li key={cafe.id}>
+                  <button type="button" className={styles.option} onClick={() => onSelect(cafe)}>
+                    <span className={styles.optionName}>{cafe.name}</span>
+                    {cafe.neighbourhood ? <span className={styles.optionMeta}>{cafe.neighbourhood}</span> : null}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
       ) : null}
     </div>
   );

@@ -2,11 +2,14 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 import DrinkDetailScreen from '../../app/(app)/drinks/[id]';
+import * as creditsApi from '../../src/features/credits/api';
 import { useAuth } from '../../src/features/auth';
 import * as drinksApi from '../../src/features/drinks/api';
 import type { DrinkResponse } from '../../src/features/drinks/types';
 import * as ratingsApi from '../../src/features/ratings/api';
 import type { DrinkRatingResponse } from '../../src/features/ratings/types';
+import * as subscriptionApi from '../../src/features/subscription/api';
+import type { SubscriptionResponse } from '../../src/features/subscription/types';
 import type { PageResponse } from '../../src/types/api';
 import type { MemberDto } from '../../src/types/auth';
 
@@ -21,6 +24,8 @@ jest.mock('expo-router', () => ({
 
 jest.mock('../../src/features/drinks/api');
 jest.mock('../../src/features/ratings/api');
+jest.mock('../../src/features/credits/api');
+jest.mock('../../src/features/subscription/api');
 jest.mock('../../src/features/auth', () => ({
   ...jest.requireActual('../../src/features/auth'),
   useAuth: jest.fn(),
@@ -30,7 +35,31 @@ const mockGetDrinkById = drinksApi.getDrinkById as jest.MockedFunction<typeof dr
 const mockGetDrinkRatings = ratingsApi.getDrinkRatings as jest.MockedFunction<
   typeof ratingsApi.getDrinkRatings
 >;
+const mockGetMyCreditBalance = creditsApi.getMyCreditBalance as jest.MockedFunction<
+  typeof creditsApi.getMyCreditBalance
+>;
+const mockGetMySubscription = subscriptionApi.getMySubscription as jest.MockedFunction<
+  typeof subscriptionApi.getMySubscription
+>;
 const mockUseAuth = useAuth as jest.MockedFunction<typeof useAuth>;
+
+function activeSubscription(overrides: Partial<SubscriptionResponse> = {}): SubscriptionResponse {
+  return {
+    status: 'ACTIVE',
+    currentPeriodStart: '2026-01-01',
+    currentPeriodEnd: '2026-02-01',
+    cancelAtPeriodEnd: false,
+    ...overrides,
+  };
+}
+
+function notFoundError() {
+  return {
+    isAxiosError: true,
+    response: { status: 404, data: { code: 'RESOURCE_NOT_FOUND', message: 'No subscription found' } },
+    toJSON: () => ({}),
+  };
+}
 
 const AUTHENTICATED_USER: MemberDto = {
   id: 'member-1',
@@ -41,6 +70,7 @@ const AUTHENTICATED_USER: MemberDto = {
   status: 'ACTIVE',
   roles: ['MEMBER'],
   createdAt: new Date().toISOString(),
+  emailVerified: true,
 };
 
 function authAs(user: MemberDto | null) {
@@ -52,6 +82,10 @@ function authAs(user: MemberDto | null) {
     logout: jest.fn(),
     deleteAccount: jest.fn(),
     initializeAuth: jest.fn(),
+    verifyEmail: jest.fn(),
+    resendVerificationEmail: jest.fn(),
+    forgotPassword: jest.fn(),
+    resetPassword: jest.fn(),
   });
 }
 
@@ -136,6 +170,13 @@ beforeEach(() => {
   mockSearchParams = { id: 'drink-1' };
   mockGetDrinkRatings.mockResolvedValue(ratingsPage([]));
   authAs(AUTHENTICATED_USER);
+  // Sensible defaults for the redeem-gating section below - individual
+  // tests there override these where the subscription/credit state itself
+  // is what's being tested; every pre-existing test in this file only cares
+  // about drink/rating rendering and just needs an authenticated member who
+  // CAN redeem, so the CTA it already expects still renders.
+  mockGetMySubscription.mockResolvedValue(activeSubscription());
+  mockGetMyCreditBalance.mockResolvedValue({ balance: 30 });
 });
 
 describe('DrinkDetailScreen', () => {
@@ -265,6 +306,92 @@ describe('DrinkDetailScreen', () => {
       renderScreen();
       await screen.findByText('Currently unavailable');
 
+      expect(screen.queryByLabelText('Redeem this drink')).toBeNull();
+    });
+  });
+
+  describe('Redeem gating by account state (Phase G)', () => {
+    it('prompts an unauthenticated visitor to become a member instead of redeeming', async () => {
+      mockGetDrinkById.mockResolvedValue(fullDrink());
+      authAs(null);
+
+      renderScreen();
+      fireEvent.press(await screen.findByLabelText('Become a Member to Redeem'));
+
+      expect(mockPush).toHaveBeenCalledWith('/(app)/profile/subscription');
+      expect(screen.queryByLabelText('Redeem this drink')).toBeNull();
+    });
+
+    it('prompts a registered-but-never-subscribed member to become a member instead of redeeming', async () => {
+      mockGetDrinkById.mockResolvedValue(fullDrink());
+      authAs(AUTHENTICATED_USER);
+      mockGetMySubscription.mockRejectedValue(notFoundError());
+
+      renderScreen();
+
+      expect(await screen.findByLabelText('Become a Member to Redeem')).toBeTruthy();
+      expect(screen.queryByLabelText('Redeem this drink')).toBeNull();
+    });
+
+    it('prompts a member whose subscription has fully cancelled the same way as a never-subscribed one', async () => {
+      mockGetDrinkById.mockResolvedValue(fullDrink());
+      authAs(AUTHENTICATED_USER);
+      mockGetMySubscription.mockResolvedValue(activeSubscription({ status: 'CANCELLED' }));
+
+      renderScreen();
+
+      expect(await screen.findByLabelText('Become a Member to Redeem')).toBeTruthy();
+      expect(screen.queryByLabelText('Redeem this drink')).toBeNull();
+    });
+
+    it('shows a normal, enabled "Redeem this drink" CTA for a subscribed member with enough credits', async () => {
+      mockGetDrinkById.mockResolvedValue(fullDrink()); // creditPrice: 4
+      authAs(AUTHENTICATED_USER);
+      mockGetMySubscription.mockResolvedValue(activeSubscription());
+      mockGetMyCreditBalance.mockResolvedValue({ balance: 10 });
+
+      renderScreen();
+      const redeemButton = await screen.findByLabelText('Redeem this drink');
+
+      expect(redeemButton.props.accessibilityState?.disabled).not.toBe(true);
+      fireEvent.press(redeemButton);
+      expect(mockPush).toHaveBeenCalledWith('/(app)/drinks/redeem?drinkId=drink-1');
+    });
+
+    it('shows a disabled CTA with the balance and renewal date when the member does not have enough credits for this drink', async () => {
+      mockGetDrinkById.mockResolvedValue(fullDrink()); // creditPrice: 4
+      authAs(AUTHENTICATED_USER);
+      mockGetMySubscription.mockResolvedValue(activeSubscription({ currentPeriodEnd: '2026-03-15' }));
+      mockGetMyCreditBalance.mockResolvedValue({ balance: 2 });
+
+      renderScreen();
+
+      expect(await screen.findByText('You have 2 credits - this drink costs 4.')).toBeTruthy();
+      // Exact formatted date deliberately not asserted (locale/timezone
+      // dependent, same reasoning as SubscriptionStatusCard's own tests) -
+      // only that the renewal-date line renders at all.
+      expect(screen.getByText(/Your credits renew on/)).toBeTruthy();
+      const redeemButton = screen.getByLabelText('Redeem this drink');
+      expect(redeemButton.props.accessibilityState?.disabled).toBe(true);
+
+      fireEvent.press(redeemButton);
+      expect(mockPush).not.toHaveBeenCalledWith('/(app)/drinks/redeem?drinkId=drink-1');
+    });
+
+    it('prompts a member with a failed payment to update their payment method instead of redeeming', async () => {
+      mockGetDrinkById.mockResolvedValue(fullDrink());
+      authAs(AUTHENTICATED_USER);
+      mockGetMySubscription.mockResolvedValue(activeSubscription({ status: 'PAST_DUE' }));
+      mockGetMyCreditBalance.mockResolvedValue({ balance: 30 });
+
+      renderScreen();
+
+      expect(
+        await screen.findByText("Your last payment didn't go through. Update your payment method to redeem drinks again.")
+      ).toBeTruthy();
+      fireEvent.press(screen.getByLabelText('Update payment method'));
+
+      expect(mockPush).toHaveBeenCalledWith('/(app)/profile/subscription');
       expect(screen.queryByLabelText('Redeem this drink')).toBeNull();
     });
   });

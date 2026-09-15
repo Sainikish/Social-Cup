@@ -5,17 +5,35 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { toApiError } from '../../../src/api/client';
 import { Button, ErrorState, LoadingIndicator } from '../../../src/components';
 import { useAuth } from '../../../src/features/auth';
+import { useCreditBalanceQuery } from '../../../src/features/credits';
 import { DrinkPhoto, DrinkPrice, useDrinkDetailQuery } from '../../../src/features/drinks';
 import {
   RatingForm,
   RatingList,
+  RatingSummaryBadge,
   ratingsListErrorMessage,
   useDrinkRatingsQuery,
 } from '../../../src/features/ratings';
+import { useSubscriptionQuery, type SubscriptionResponse } from '../../../src/features/subscription';
 import { colors, fontSize, fontWeight, radius, spacing } from '../../../src/theme';
 import { genericErrorMessage } from '../../../src/utils/apiErrors';
 
 const PHOTO_SIZE = 220;
+
+// Mirrors SubscriptionStatusCard's own formatDate exactly - kept as a local
+// copy rather than a shared export, the same call this codebase already
+// makes for small pure formatting helpers (see drinkKeys.hasMorePages'
+// comment in features/drinks/hooks.ts).
+function formatRenewalDate(value: string | null): string | null {
+  if (!value) {
+    return null;
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+  return date.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+}
 
 export default function DrinkDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -23,6 +41,8 @@ export default function DrinkDetailScreen() {
   const { user } = useAuth();
   const drinkQuery = useDrinkDetailQuery(id);
   const ratingsQuery = useDrinkRatingsQuery(id);
+  const subscriptionQuery = useSubscriptionQuery({ enabled: Boolean(user) });
+  const creditQuery = useCreditBalanceQuery({ enabled: Boolean(user) });
   const [showRatingForm, setShowRatingForm] = useState(false);
 
   if (drinkQuery.isLoading) {
@@ -48,6 +68,87 @@ export default function DrinkDetailScreen() {
   // "unavailable" note when it isn't ACTIVE uses data the API already
   // returns, it doesn't invent a new business rule.
   const isUnavailable = drink.status !== 'ACTIVE';
+
+  // Mirrors ProfileScreen/SubscriptionScreen's own convention exactly:
+  // undefined = subscription status still unknown (loading, or a non-404
+  // error); null = confirmed not subscribed (the GET 404 case); otherwise
+  // the actual SubscriptionResponse. A CANCELLED subscription is treated the
+  // same as "not subscribed" - it means membership has actually ended, not
+  // merely scheduled to end (that's cancelAtPeriodEnd on an otherwise ACTIVE
+  // subscription), so there is nothing left to redeem against.
+  const subscriptionApiError = subscriptionQuery.error ? toApiError(subscriptionQuery.error) : undefined;
+  const subscription: SubscriptionResponse | null | undefined =
+    subscriptionApiError?.code === 'RESOURCE_NOT_FOUND' ? null : subscriptionQuery.data;
+  const creditBalance = creditQuery.data?.balance;
+
+  // The PRD's four redeem-eligibility states, gated in priority order:
+  // 1) Visitor - no session, never subscribed, or a fully cancelled one -
+  //    all funnel to the same "become a member" prompt.
+  // 2) Payment failed (PAST_DUE) - blocks redemption regardless of credit
+  //    balance, since the underlying membership itself is at risk.
+  // 3) Insufficient credits for THIS drink specifically.
+  // 4) Ready - the normal, unremarkable case.
+  function renderRedeemAction() {
+    if (isUnavailable) {
+      return null;
+    }
+
+    if (!user || subscription == null || subscription.status === 'CANCELLED') {
+      return (
+        <Button
+          label="Become a Member to Redeem"
+          accessibilityLabel="Become a Member to Redeem"
+          variant="outline"
+          onPress={() => router.push('/(app)/profile/subscription')}
+        />
+      );
+    }
+
+    if (subscription.status === 'PAST_DUE') {
+      return (
+        <View style={styles.redeemBlocked}>
+          <Text style={styles.redeemBlockedMessage} accessibilityRole="alert">
+            Your last payment didn&apos;t go through. Update your payment method to redeem drinks again.
+          </Text>
+          <Button
+            label="Update Payment Method"
+            accessibilityLabel="Update payment method"
+            variant="outline"
+            onPress={() => router.push('/(app)/profile/subscription')}
+          />
+        </View>
+      );
+    }
+
+    // Credit balance hasn't resolved yet - nothing conclusive to show.
+    if (creditBalance === undefined) {
+      return null;
+    }
+
+    if (creditBalance < drink.creditPrice) {
+      const renewsOn = formatRenewalDate(subscription.currentPeriodEnd);
+      return (
+        <View style={styles.redeemBlocked}>
+          <Text style={styles.redeemBlockedMessage}>
+            You have {creditBalance} credit{creditBalance === 1 ? '' : 's'} - this drink costs{' '}
+            {drink.creditPrice}.
+          </Text>
+          {renewsOn ? (
+            <Text style={styles.redeemBlockedSubMessage}>Your credits renew on {renewsOn}.</Text>
+          ) : null}
+          <Button label="Redeem this drink" accessibilityLabel="Redeem this drink" disabled />
+        </View>
+      );
+    }
+
+    return (
+      <Button
+        label="Redeem this drink"
+        accessibilityLabel="Redeem this drink"
+        onPress={() => router.push(`/(app)/drinks/redeem?drinkId=${drink.id}`)}
+      />
+    );
+  }
 
   // The backend has no "my rating for drink X" endpoint - the currently-
   // loaded pages of the public list (already being fetched for display
@@ -77,6 +178,7 @@ export default function DrinkDetailScreen() {
                 <Text style={styles.signatureBadgeText}>★ Signature</Text>
               </View>
             ) : null}
+            <RatingSummaryBadge averageRating={drink.averageRating} ratingCount={drink.ratingCount} />
           </View>
           {drink.type ? <Text style={styles.type}>{drink.type}</Text> : null}
           {isUnavailable ? <Text style={styles.unavailable}>Currently unavailable</Text> : null}
@@ -91,13 +193,7 @@ export default function DrinkDetailScreen() {
 
           <DrinkPrice retailPrice={drink.retailPrice} creditPrice={drink.creditPrice} />
 
-          {user && !isUnavailable ? (
-            <Button
-              label="Redeem this drink"
-              accessibilityLabel="Redeem this drink"
-              onPress={() => router.push(`/(app)/drinks/redeem?drinkId=${drink.id}`)}
-            />
-          ) : null}
+          {renderRedeemAction()}
         </View>
 
         {drink.description ? (
@@ -209,6 +305,18 @@ const styles = StyleSheet.create({
   cafeLink: {
     fontSize: fontSize.sm,
     color: colors.accent,
+  },
+  redeemBlocked: {
+    gap: spacing.sm,
+  },
+  redeemBlockedMessage: {
+    fontSize: fontSize.sm,
+    color: colors.warning,
+    fontWeight: fontWeight.medium,
+  },
+  redeemBlockedSubMessage: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
   },
   sectionTitle: {
     fontSize: fontSize.md,

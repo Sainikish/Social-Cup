@@ -21,6 +21,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -33,6 +34,7 @@ import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -122,7 +124,7 @@ class AdminDrinkControllerTest {
         UUID drinkId = UUID.randomUUID();
 
         DrinkResponse response = new DrinkResponse(
-            drinkId, UUID.randomUUID(), "Cafe", "Caramel Macchiato", "Coffee", null, new BigDecimal("5.25"), 1, null, false, DrinkStatus.ACTIVE, Instant.now(), Instant.now()
+            drinkId, UUID.randomUUID(), "Cafe", "Caramel Macchiato", "Coffee", null, new BigDecimal("5.25"), 1, null, false, DrinkStatus.ACTIVE, Instant.now(), Instant.now(), null, 0L
         );
 
         when(drinkService.updateDrink(eq(drinkId), any(UpdateDrinkRequest.class))).thenReturn(response);
@@ -167,7 +169,7 @@ class AdminDrinkControllerTest {
         UUID drinkId = UUID.randomUUID();
 
         DrinkResponse response = new DrinkResponse(
-            drinkId, UUID.randomUUID(), "Cafe", "Drink", "Coffee", null, new BigDecimal("4.00"), 1, null, false, DrinkStatus.INACTIVE, Instant.now(), Instant.now()
+            drinkId, UUID.randomUUID(), "Cafe", "Drink", "Coffee", null, new BigDecimal("4.00"), 1, null, false, DrinkStatus.INACTIVE, Instant.now(), Instant.now(), null, 0L
         );
 
         when(drinkService.updateDrinkStatus(eq(drinkId), any(UpdateDrinkStatusRequest.class))).thenReturn(response);
@@ -182,5 +184,36 @@ class AdminDrinkControllerTest {
                     """))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.status", is("INACTIVE")));
+    }
+
+    @Test
+    void uploadDrinkPhoto_unauthenticated_returns401() throws Exception {
+        UUID drinkId = UUID.randomUUID();
+        MockMultipartFile photo = new MockMultipartFile("photo", "drink.jpg", "image/jpeg", "fake-bytes".getBytes());
+
+        mockMvc.perform(multipart("/admin/drinks/{id}/photo", drinkId).file(photo))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.code", is("UNAUTHENTICATED")));
+    }
+
+    @Test
+    void uploadDrinkPhoto_asAdmin_returns200() throws Exception {
+        String token = tokenProvider.generateAccessToken("admin-1", List.of(Roles.ADMIN));
+        UUID drinkId = UUID.randomUUID();
+        MockMultipartFile photo = new MockMultipartFile("photo", "drink.jpg", "image/jpeg", "fake-bytes".getBytes());
+
+        DrinkResponse response = new DrinkResponse(
+            drinkId, UUID.randomUUID(), "Cafe", "Latte", "Coffee", null, new BigDecimal("5.00"), 1,
+            "https://socialcup-photos.s3.us-east-1.amazonaws.com/drinks/" + drinkId + "/abc.jpg",
+            false, DrinkStatus.ACTIVE, Instant.now(), Instant.now(), null, 0L
+        );
+        when(drinkService.updatePhoto(eq(drinkId), any())).thenReturn(response);
+
+        mockMvc.perform(multipart("/admin/drinks/{id}/photo", drinkId)
+                .file(photo)
+                .header("Authorization", "Bearer " + token))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.id", is(drinkId.toString())))
+            .andExpect(jsonPath("$.photoUrl", is(response.photoUrl())));
     }
 }

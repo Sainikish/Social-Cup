@@ -7,6 +7,13 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
+// averageRating/ratingCount are never read off the Drink entity itself (there
+// is no such column) - they come from a separate, batched RatingRepository
+// aggregate query (see DrinkService), which is why fromEntity below takes them
+// as explicit parameters rather than deriving them internally. averageRating
+// is null (not 0.0/0) whenever ratingCount is 0 - the PRD's "New" indication
+// for an unrated drink depends on being able to tell "never rated" apart from
+// "rated, and it's bad".
 public record DrinkResponse(
     UUID id,
     UUID cafeId,
@@ -20,9 +27,11 @@ public record DrinkResponse(
     boolean signature,
     DrinkStatus status,
     Instant createdAt,
-    Instant updatedAt
+    Instant updatedAt,
+    Double averageRating,
+    long ratingCount
 ) {
-    public static DrinkResponse fromEntity(Drink drink) {
+    public static DrinkResponse fromEntity(Drink drink, Double averageRating, long ratingCount) {
         return new DrinkResponse(
             drink.getId(),
             drink.getCafe() != null ? drink.getCafe().getId() : null,
@@ -36,7 +45,9 @@ public record DrinkResponse(
             drink.isSignature(),
             drink.getStatus(),
             drink.getCreatedAt(),
-            drink.getUpdatedAt()
+            drink.getUpdatedAt(),
+            averageRating,
+            ratingCount
         );
     }
 }

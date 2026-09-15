@@ -9,6 +9,7 @@ export interface MemberDto {
   status: string;
   roles: string[];
   createdAt: string;
+  emailVerified: boolean;
 }
 
 // Mirrors com.socialcup.auth.dto.AuthResponse - returned by
@@ -40,4 +41,21 @@ export interface RegisterRequest {
 // Mirrors com.socialcup.auth.dto.RefreshTokenRequest.
 export interface RefreshRequest {
   refreshToken: string;
+}
+
+// Mirrors com.socialcup.auth.dto.VerifyEmailRequest.
+export interface VerifyEmailRequest {
+  code: string;
+}
+
+// Mirrors com.socialcup.auth.dto.ForgotPasswordRequest.
+export interface ForgotPasswordRequest {
+  email: string;
+}
+
+// Mirrors com.socialcup.auth.dto.ResetPasswordRequest.
+export interface ResetPasswordRequest {
+  email: string;
+  code: string;
+  newPassword: string;
 }

@@ -34,6 +34,13 @@ spring:
       connection-timeout: 20000
       idle-timeout: 300000
       max-lifetime: 1200000
+  servlet:
+    multipart:
+      # Above PhotoStorageService's own 5MB limit so a too-large file reaches
+      # that check (and its clear INVALID_PHOTO message) instead of being
+      # rejected earlier by Tomcat with a generic multipart error.
+      max-file-size: 10MB
+      max-request-size: 10MB
   flyway:
     enabled: true
     locations: classpath:db/migration
@@ -92,6 +99,7 @@ app:
   cors:
     allowed-origins:
       - http://localhost:3000
+      - http://localhost:5173
       - http://localhost:8081
       - http://localhost:19000
       - http://localhost:19001
@@ -110,11 +118,14 @@ app:
     api-key: ${STRIPE_API_KEY:sk_test_placeholder}
     webhook-secret: ${STRIPE_WEBHOOK_SECRET:whsec_placeholder}
     price-id: ${STRIPE_PRICE_ID:price_test_placeholder}
+  # The externally-reachable URL this backend is served at (including the
+  # /api context path) - PhotoStorageService uses it to build the URL a
+  # photo is fetched back from (see PhotoController). Defaults to this
+  # project's actual deployed Railway URL (see admin-web/.env), not a
+  # placeholder.
+  public-base-url: ${PUBLIC_BASE_URL:https://social-cup-production.up.railway.app/api}
   aws:
     region: ${AWS_REGION:us-east-1}
-    s3:
-      bucket: ${AWS_S3_BUCKET:socialcup-photos}
-      cloudfront-domain: ${AWS_CLOUDFRONT_DOMAIN:cdn.socialcup.app}
     ses:
       sender-email: ${AWS_SES_SENDER:noreply@socialcup.app}
   sentry:

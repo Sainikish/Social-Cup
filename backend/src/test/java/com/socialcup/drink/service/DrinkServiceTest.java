@@ -13,6 +13,8 @@ import com.socialcup.drink.entity.Drink;
 import com.socialcup.drink.entity.DrinkStatus;
 import com.socialcup.drink.mapper.DrinkMapper;
 import com.socialcup.drink.repository.DrinkRepository;
+import com.socialcup.rating.service.RatingService;
+import com.socialcup.storage.service.PhotoStorageService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -21,6 +23,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -43,13 +47,19 @@ class DrinkServiceTest {
     @Mock
     private CafeRepository cafeRepository;
 
+    @Mock
+    private PhotoStorageService photoStorageService;
+
+    @Mock
+    private RatingService ratingService;
+
     private DrinkMapper drinkMapper;
     private DrinkService drinkService;
 
     @BeforeEach
     void setUp() {
         drinkMapper = new DrinkMapper();
-        drinkService = new DrinkService(drinkRepository, cafeRepository, drinkMapper);
+        drinkService = new DrinkService(drinkRepository, cafeRepository, drinkMapper, photoStorageService, ratingService);
     }
 
     @Test
@@ -172,5 +182,35 @@ class DrinkServiceTest {
 
         assertThat(response.status()).isEqualTo(DrinkStatus.ARCHIVED);
         assertThat(drink.getArchivedAt()).isNotNull();
+    }
+
+    // ---- Photo ----
+
+    @Test
+    void updatePhoto_success_replacesThePhotoUrl() {
+        UUID id = UUID.randomUUID();
+        Drink drink = new Drink();
+        drink.setId(id);
+        drink.setPhotoUrl("https://example.com/old.jpg");
+        MultipartFile file = new MockMultipartFile("photo", "drink.jpg", "image/jpeg", "bytes".getBytes());
+
+        when(drinkRepository.findByIdAndArchivedAtIsNull(id)).thenReturn(Optional.of(drink));
+        when(photoStorageService.uploadPhoto(eq(file), eq("drinks/" + id))).thenReturn("https://example.com/new.jpg");
+        when(drinkRepository.save(any(Drink.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        DrinkResponse response = drinkService.updatePhoto(id, file);
+
+        assertThat(response.photoUrl()).isEqualTo("https://example.com/new.jpg");
+        assertThat(drink.getPhotoUrl()).isEqualTo("https://example.com/new.jpg");
+    }
+
+    @Test
+    void updatePhoto_drinkNotFound_throwsResourceNotFoundException() {
+        UUID id = UUID.randomUUID();
+        MultipartFile file = new MockMultipartFile("photo", "drink.jpg", "image/jpeg", "bytes".getBytes());
+        when(drinkRepository.findByIdAndArchivedAtIsNull(id)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> drinkService.updatePhoto(id, file))
+            .isInstanceOf(ResourceNotFoundException.class);
     }
 }

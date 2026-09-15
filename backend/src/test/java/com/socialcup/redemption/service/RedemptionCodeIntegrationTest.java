@@ -10,6 +10,7 @@ import com.socialcup.redemption.dto.RedemptionCodeResponse;
 import com.socialcup.redemption.entity.RedemptionCode;
 import com.socialcup.redemption.repository.RedemptionCodeRepository;
 import com.socialcup.user.entity.Member;
+import com.socialcup.user.entity.MemberStatus;
 import com.socialcup.user.repository.MemberRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -70,6 +71,7 @@ class RedemptionCodeIntegrationTest {
         Member member = new Member();
         member.setEmail("ada-" + UUID.randomUUID() + "@example.com");
         member.setFirstName("Ada");
+        member.setStatus(MemberStatus.ACTIVE);
         member = memberRepository.saveAndFlush(member);
         if (credits > 0) {
             creditService.grantMonthlyCredits(member.getId(), "test-seed");

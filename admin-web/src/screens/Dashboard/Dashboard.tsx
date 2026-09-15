@@ -50,6 +50,7 @@ export function Dashboard() {
             onClick={() => navigate('/audit-log')}
             className={styles.manageCafesButton}
           />
+          <Button label="Settings" onClick={() => navigate('/settings')} className={styles.manageCafesButton} />
         </div>
       </Card>
 

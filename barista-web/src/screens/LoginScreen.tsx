@@ -2,6 +2,8 @@ import { useMutation } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import brandMark from '../assets/brand-mark.png';
+import loginHero from '../assets/login-hero.jpg';
 import { toApiError } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { Button, TextField } from '../components';
@@ -45,32 +47,45 @@ export function LoginScreen() {
   const isSubmitting = loginMutation.isPending;
 
   return (
-    <div className={styles.container}>
-      <form className={styles.form} onSubmit={handleSubmit}>
-        <h1 className={styles.title}>Social Cup Barista</h1>
-        <p className={styles.subtitle}>Log in with your cafe and PIN.</p>
+    <div className={styles.page}>
+      <div className={styles.heroPanel} style={{ backgroundImage: `url(${loginHero})` }}>
+        <div className={styles.heroOverlay}>
+          <span className={styles.heroBadge}>Social Cup</span>
+          <h2 className={styles.heroTitle}>Ready behind the counter.</h2>
+          <p className={styles.heroSubtitle}>Scan codes and redeem drinks in seconds.</p>
+        </div>
+      </div>
 
-        <CafeSearchSelect value={cafe} onSelect={setCafe} onClear={() => setCafe(null)} />
+      <div className={styles.formPanel}>
+        <div className={styles.card}>
+          <img className={styles.badge} src={brandMark} alt="" aria-hidden="true" />
+          <h1 className={styles.title}>Social Cup Barista</h1>
+          <p className={styles.subtitle}>Log in with your cafe and PIN.</p>
 
-        <TextField
-          id="cafe-pin"
-          label="PIN"
-          type="password"
-          inputMode="numeric"
-          autoComplete="off"
-          value={pin}
-          onChange={(event) => setPin(event.target.value)}
-          disabled={isSubmitting}
-        />
+          <form className={styles.form} onSubmit={handleSubmit}>
+            <CafeSearchSelect value={cafe} onSelect={setCafe} onClear={() => setCafe(null)} />
 
-        {formError ? (
-          <p className={styles.error} role="alert">
-            {formError}
-          </p>
-        ) : null}
+            <TextField
+              id="cafe-pin"
+              label="PIN"
+              type="password"
+              inputMode="numeric"
+              autoComplete="off"
+              value={pin}
+              onChange={(event) => setPin(event.target.value)}
+              disabled={isSubmitting}
+            />
 
-        <Button type="submit" label="Log In" loading={isSubmitting} disabled={isSubmitting} />
-      </form>
+            {formError ? (
+              <p className={styles.error} role="alert">
+                {formError}
+              </p>
+            ) : null}
+
+            <Button type="submit" label="Log In" loading={isSubmitting} disabled={isSubmitting} />
+          </form>
+        </div>
+      </div>
     </div>
   );
 }

@@ -17,6 +17,9 @@ import com.socialcup.redemption.entity.RedemptionCode;
 import com.socialcup.redemption.repository.RedemptionCodeRepository;
 import com.socialcup.redemption.repository.RedemptionRepository;
 import com.socialcup.redemption.repository.RedemptionSpecifications;
+import com.socialcup.user.entity.Member;
+import com.socialcup.user.entity.MemberStatus;
+import com.socialcup.user.repository.MemberRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -45,17 +48,20 @@ public class RedemptionService {
     private final DrinkRepository drinkRepository;
     private final CafeRepository cafeRepository;
     private final CreditService creditService;
+    private final MemberRepository memberRepository;
 
     public RedemptionService(RedemptionCodeRepository redemptionCodeRepository,
                               RedemptionRepository redemptionRepository,
                               DrinkRepository drinkRepository,
                               CafeRepository cafeRepository,
-                              CreditService creditService) {
+                              CreditService creditService,
+                              MemberRepository memberRepository) {
         this.redemptionCodeRepository = redemptionCodeRepository;
         this.redemptionRepository = redemptionRepository;
         this.drinkRepository = drinkRepository;
         this.cafeRepository = cafeRepository;
         this.creditService = creditService;
+        this.memberRepository = memberRepository;
     }
 
     public RedemptionResponse redeem(UUID cafeId, String codeValue) {
@@ -95,6 +101,19 @@ public class RedemptionService {
             .orElseThrow(() -> new ConflictException("Cafe is not currently available for redemption"));
 
         UUID memberId = redemptionCode.getMember().getId();
+
+        // Re-resolved fresh (not redemptionCode.getMember()'s cached
+        // association) so a subscription that ended in the ~5 minutes since
+        // this code was generated is caught here, at the moment the barista
+        // actually scans it - matching the "membership inactive" red-screen
+        // reason. Does NOT check for SubscriptionStatus.PAST_DUE: that's a
+        // deliberate Stripe retry grace period (see SubscriptionService's own
+        // class Javadoc), not a membership lapse.
+        Member member = memberRepository.findByIdAndDeletedAtIsNull(memberId)
+            .orElseThrow(() -> new ResourceNotFoundException("Member not found with id: " + memberId));
+        if (member.getStatus() != MemberStatus.ACTIVE) {
+            throw new ConflictException("Member's membership is not active");
+        }
 
         // Unchanged, existing Phase A method: locks the member row, re-verifies
         // the balance from credit_ledger, throws InsufficientCreditsException if

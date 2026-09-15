@@ -1,7 +1,19 @@
-export { createCafe, getPublicCafeById, searchCafes, updateCafe, updateCafeStatus } from './api';
-export type { CafeSearchParams } from './api';
+export {
+  addCafePhoto,
+  createCafe,
+  getCafeByIdForAdmin,
+  removeCafePhoto,
+  resetCafePin,
+  searchCafes,
+  searchCafesForAdmin,
+  updateCafe,
+  updateCafeStatus,
+} from './api';
+export type { CafeAdminSearchParams, CafeSearchParams } from './api';
 export { CafeForm } from './components/CafeForm';
 export type { CafeFormProps } from './components/CafeForm';
+export { CafePinResetDialog } from './components/CafePinResetDialog';
+export type { CafePinResetDialogProps } from './components/CafePinResetDialog';
 export { CafeStatusDialog } from './components/CafeStatusDialog';
 export type { CafeStatusDialogProps } from './components/CafeStatusDialog';
 export { cafeErrorMessage } from './errorMessages';
@@ -14,16 +26,20 @@ export {
 } from './formValues';
 export type { CafeFormValues } from './formValues';
 export {
+  useAddCafePhotoMutation,
+  useAdminCafeDetailQuery,
+  useAdminCafeSearchQuery,
   useCafeSearchQuery,
   useCreateCafeMutation,
-  usePublicCafeDetailQuery,
+  useRemoveCafePhotoMutation,
+  useResetCafePinMutation,
   useUpdateCafeMutation,
   useUpdateCafeStatusMutation,
 } from './hooks';
 export { cafeKeys } from './queryKeys';
 export type {
   AdminCafeDetailResponse,
-  CafeDetailResponse,
+  AdminCafePinResetResponse,
   CafeHoursDto,
   CafePhotoDto,
   CafeStatus,

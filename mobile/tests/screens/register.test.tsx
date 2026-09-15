@@ -40,6 +40,10 @@ describe('RegisterScreen', () => {
       logout: jest.fn(),
       deleteAccount: jest.fn(),
       initializeAuth: jest.fn(),
+      verifyEmail: jest.fn(),
+      resendVerificationEmail: jest.fn(),
+      forgotPassword: jest.fn(),
+      resetPassword: jest.fn(),
     });
 
     renderRegisterScreen();
@@ -70,6 +74,10 @@ describe('RegisterScreen', () => {
       logout: jest.fn(),
       deleteAccount: jest.fn(),
       initializeAuth: jest.fn(),
+      verifyEmail: jest.fn(),
+      resendVerificationEmail: jest.fn(),
+      forgotPassword: jest.fn(),
+      resetPassword: jest.fn(),
     });
 
     renderRegisterScreen();
@@ -109,6 +117,10 @@ describe('RegisterScreen', () => {
       logout: jest.fn(),
       deleteAccount: jest.fn(),
       initializeAuth: jest.fn(),
+      verifyEmail: jest.fn(),
+      resendVerificationEmail: jest.fn(),
+      forgotPassword: jest.fn(),
+      resetPassword: jest.fn(),
     });
 
     renderRegisterScreen();

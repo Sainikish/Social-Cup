@@ -114,6 +114,17 @@ export default function ProfileScreen() {
             <Text style={styles.infoValue}>{formatAccountStatus(user.status)}</Text>
           </View>
         ) : null}
+        {user && !user.emailVerified ? (
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Email</Text>
+            <Button
+              label="Verify Email"
+              variant="outline"
+              accessibilityLabel="Verify email"
+              onPress={() => router.push('/(app)/profile/verify-email')}
+            />
+          </View>
+        ) : null}
         <Text style={styles.readOnlyNote}>Your account details are read-only here.</Text>
       </Card>
 

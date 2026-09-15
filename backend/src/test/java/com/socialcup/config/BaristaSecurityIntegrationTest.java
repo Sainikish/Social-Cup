@@ -1,6 +1,7 @@
 package com.socialcup.config;
 
 import com.socialcup.admin.repository.AuditLogRepository;
+import com.socialcup.auth.repository.VerificationCodeRepository;
 import com.socialcup.barista.entity.CafePin;
 import com.socialcup.barista.repository.CafePinRepository;
 import com.socialcup.cafe.entity.Cafe;
@@ -16,6 +17,7 @@ import com.socialcup.security.JwtTokenProvider;
 import com.socialcup.subscription.repository.ProcessedWebhookEventRepository;
 import com.socialcup.subscription.repository.SubscriptionRepository;
 import com.socialcup.security.Roles;
+import com.socialcup.storage.repository.PhotoBlobRepository;
 import com.socialcup.user.repository.MemberRepository;
 import io.jsonwebtoken.Claims;
 import org.junit.jupiter.api.Test;
@@ -106,8 +108,22 @@ class BaristaSecurityIntegrationTest {
     @MockitoBean
     private AuditLogRepository auditLogRepository;
 
+    // Added when the email-verification/password-reset feature introduced
+    // AuthService's dependency on this repository - without this the context
+    // fails to start (no bean of this type exists under "no-persistence"),
+    // exactly the same class of gap CreditLedgerRepository/CafePinRepository/
+    // RedemptionCodeRepository above were already added here to avoid.
+    @MockitoBean
+    private VerificationCodeRepository verificationCodeRepository;
+
     @MockitoBean
     private PayoutRepository payoutRepository;
+
+    // Added when PhotoStorageService moved cafe/drink photo storage off S3
+    // into this same database (see PhotoStorageService/PhotoController) -
+    // same reason as every other repository in this list.
+    @MockitoBean
+    private PhotoBlobRepository photoBlobRepository;
 
     @Test
     void baristaLoginIsPublic_andReturnsAWorkingBaristaTokenOnSuccess() throws Exception {

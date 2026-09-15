@@ -38,6 +38,7 @@ const SAMPLE_USER = {
   status: 'ACTIVE',
   roles: ['MEMBER'],
   createdAt: new Date().toISOString(),
+  emailVerified: true,
 };
 
 function refreshSuccessBody(): AuthResponse {
