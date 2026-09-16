@@ -104,6 +104,7 @@ app:
       - http://localhost:19000
       - http://localhost:19001
       - https://admin-web-nikish1.vercel.app
+      - https://admin-web-orcin-kappa.vercel.app
       - https://barista-web-beta.vercel.app
   rate-limit:
     enabled: true
