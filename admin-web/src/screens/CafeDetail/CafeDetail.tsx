@@ -95,7 +95,10 @@ export function CafeDetail() {
   // only offers a manual CafeSearchSelect combobox), so this link does not
   // yet skip that step. It is included anyway, harmlessly ignored today, so
   // that adding pre-fill support to barista-web later needs no change here.
-  const scanLink = `${config.baristaWebUrl}/login?cafe=${detail.id}`;
+  // null when VITE_BARISTA_WEB_URL isn't configured for this deployment -
+  // the section below hides the link (and only the link) rather than this
+  // screen, or the app, failing to render at all.
+  const scanLink = config.baristaWebUrl ? `${config.baristaWebUrl}/login?cafe=${detail.id}` : null;
   const initialValues: CafeFormValues = {
     ...cafeFormValuesFromDetail(detail),
     payoutRate: detail.payoutRate != null ? String(detail.payoutRate) : '',
@@ -345,10 +348,12 @@ export function CafeDetail() {
           Baristas at this cafe log in to the scanner app with this cafe and a shared PIN. There is no admin
           endpoint yet to view whether a PIN already exists - Generate/Reset always issues a brand-new one.
         </p>
-        <div className={styles.settingItem}>
-          <span className={styles.settingLabel}>Scan / login link</span>
-          <code className={styles.scanLink}>{scanLink}</code>
-        </div>
+        {scanLink ? (
+          <div className={styles.settingItem}>
+            <span className={styles.settingLabel}>Scan / login link</span>
+            <code className={styles.scanLink}>{scanLink}</code>
+          </div>
+        ) : null}
         <div className={styles.statusActions}>
           <Button label="Generate / Reset PIN" variant="outline" onClick={handleResetPin} loading={resetPinMutation.isPending} disabled={resetPinMutation.isPending} />
         </div>

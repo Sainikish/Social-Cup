@@ -30,12 +30,14 @@ function resolveApiBaseUrl(): string {
   );
 }
 
-// Same fail-fast philosophy as resolveApiBaseUrl above. Used only to build
-// the barista scan/login link shown on a cafe's Barista Access section (see
-// CafeDetail.tsx) - this app never calls barista-web's API, it only links a
-// human admin to it, so an incorrect/missing value here breaks a displayed
-// link rather than any request this app makes itself.
-function resolveBaristaWebUrl(): string {
+// Deliberately NOT the same fail-fast philosophy as resolveApiBaseUrl above:
+// this only builds a displayed link (the barista scan/login link on a
+// cafe's Barista Access section, see CafeDetail.tsx) - this app never calls
+// barista-web's API itself, so a missing value should hide that one link,
+// not take down every screen that happens to import `config`. Returns null
+// rather than throwing; CafeDetail.tsx only renders the section when this
+// is set.
+function resolveBaristaWebUrl(): string | null {
   const explicit = import.meta.env.VITE_BARISTA_WEB_URL;
   if (explicit && explicit.length > 0) {
     return explicit;
@@ -45,10 +47,7 @@ function resolveBaristaWebUrl(): string {
     return 'http://localhost:5174';
   }
 
-  throw new Error(
-    'VITE_BARISTA_WEB_URL must be set for this environment. ' +
-      'No default barista-web URL is assumed outside local development.'
-  );
+  return null;
 }
 
 const environment = resolveEnvironment();
